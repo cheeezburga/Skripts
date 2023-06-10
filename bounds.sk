@@ -1,0 +1,346 @@
+on load:
+	set {msgTypes::*} to "off", "chat", "title" and "action bar"
+
+on disconnect:
+	delete {bounds::pos::%player%::*}
+
+on join:
+	set {bounds::scoreboard::%player%::toggle} to false
+
+on tab complete of "/bound" or "/bounds":
+	set tab completions for position 1 to "list", "wand", "scoreboard", "create", "delete", "resize" and "info"
+	if tab arg-1 is "list" or "wand" or "create" or "make" or "scoreboard":
+		set tab completions for position 2 to ""
+	else if tab arg-1 is "create" or "make":
+		set tab completions for position 3 to "full"
+	else if tab arg-1 is "delete" or "remove" or "info":
+		set tab completions for position 2 to listOfBounds()
+		set tab completions for position 3 to ""
+	else if tab arg-1 is "resize":
+		set tab completions for position 2 to listOfBounds()
+		set tab completions for position 3 to "full" and "new"
+
+function listOfBounds() :: strings:
+	loop all bounds:
+		add id of loop-bound to {_bounds::names::*}
+	return {_bounds::names::*}
+
+command /bound [<text>] [<text>] [<text>]:
+	aliases: /bounds
+	trigger:
+		if arg-1 is not set:
+			send "&aList of bounds: %listOfBounds()%"
+		if arg-1 is set:
+			if arg-1 is "wand":
+				give player stone axe named "&fBounds Wand"
+			else if arg-1 is "list":
+				send "&aList of bounds: %listOfBounds()%"
+			else if arg-1 is "scoreboard":
+				if arg-2 is set:
+					if arg-2 is "on" or "true":
+						set {bounds::scoreboard::%player%::toggle} to true
+						toggle player's scoreboard to true
+						updateBoundScoreboard(player)
+						send "&aToggled your bounds scoreboard to 'on'."
+					else if arg-2 is "off" or "false":
+						set {bounds::scoreboard::%player%::toggle} to false
+						toggle player's scoreboard to false
+						updateBoundScoreboard(player)
+						send "&aToggled your bounds scoreboard to 'off'."
+					else:
+						send "&cPlease specify a correct second argument! [/bounds scoreboard (on / off)]"
+				else:
+					if {bounds::scoreboard::%player%::toggle} is true:
+						set {_o} to "on"
+					else:
+						set {_o} to "off"
+					send "&aYour scoreboard is currently '%{_o}%'."
+			else if arg-1 is "create" or "make":
+				if arg-2 is not set:
+					send "&cPlease specify a second argument! [/bounds create (bound id) (:full)]"
+				if arg-2 is set:
+					if arg-3 is not set:
+						createBound(player, arg-2, 1)
+					if arg-3 is set:
+						if arg-3 is "full":
+							createBound(player, arg-2, 2)
+						else:
+							send "&c%arg-3% is not a valid third argument! [/bounds create (bound id) (:full)]"
+			else if arg-1 is "delete" or "remove":
+				if arg-2 is not set:
+					send "&cPlease specify a bound ID! [/bounds delete (bound id)]"
+				if arg-2 is set:
+					deleteBound(player, arg-2)
+			else if arg-1 is "info":
+				if arg-2 is not set:
+					send "&cPlease specify a bound ID! [/bounds delete (bound id)]"
+				if arg-2 is set:
+					boundInfo(player, arg-2)
+			else if arg-1 is "resize":
+				if arg-2 is not set:
+					send "&cPlease specify a second argument! [/bounds resize (bound id) (full / new)]"
+				if arg-2 is set:
+					if arg-3 is not set:
+						send "&cPlease specify a third argument! [/bounds resize (bound id) (full / new)]"
+					if arg-3 is set:
+						if arg-3 is "full":
+							resizeBound(player, arg-2, 1)
+						else if arg-3 is "new":
+							resizeBound(player, arg-2, 2)
+						else:
+							send "&c%arg-3% is not a valid third argument! [/bounds resize (bound id) (full / new)]"
+			else if arg-1 is "outline":
+				if arg-2 is not set:
+					send "&cPlease specify a second argument! [/bounds outline (bound id)]"
+				if arg-2 is set:
+					showBoundOutline(player, arg-2)
+			else if arg-1 is "options":
+				if arg-2 is not set:
+					send "&cPlease specify a bound ID! [/bounds options (bound id)]"
+				if arg-2 is set:
+					boundOptions(player, arg-2)
+
+function isBound(id: text) :: boolean:
+	if all bounds contains bound with id {_id}:
+		return true
+	return false
+
+on left click:
+	if player's held item is stone axe named "&fBounds Wand":
+		cancel event
+		setBoundLocation(player, location of event-block, 1)
+
+on right click:
+	if player's held item is stone axe named "&fBounds Wand":
+		cancel event
+		setBoundLocation(player, location of event-block, 2)
+
+function setBoundLocation(p: player, loc: location, i: integer):
+	set {bounds::pos::%{_p}%::%{_i}%} to {_loc}
+	send "&aBound position %{_i}% set!" to {_p}
+
+#function setBoundScoreboard(p: player, id: text):
+#	if isBound({_id}) is true:
+#		set {bounds::scoreboard::%{_p}%::bound} to {_id}
+#		updateBoundScoreboard({_p})
+#		send "&aSet the bound of your scoreboard to the bound with ID '%{_id}%'!" to {_p}
+#	else:
+#		send "&cThere is no bound with ID '%{_id}%'!" to {_p}
+
+function updateBoundScoreboard(p: player):
+	clear {_p}'s scoreboard
+	set title of {_p}'s scoreboard to "&9&lBounds"
+	set line 15 of {_p}'s scoreboard to "You're currently in:"
+	set {_bounds::*} to bound ids at location of {_p}
+	if size of {_bounds::*} >= 1:
+		if size of {_bounds::*} >= 15:
+			loop 13 times:
+				set line (15 - loop-number) of {_p}'s scoreboard to "%{_bounds::%loop-number%}%"
+			set line 0 of {_p}'s scoreboard to "... and %(size of {_bounds::*} - 13)% more"
+		else if size of {_bounds::*} = 14:
+			loop 14 times:
+				set line (15 - loop-number) of {_p}'s scoreboard to "%{_bounds::%loop-number%}%"
+		else:
+			loop (size of {_bounds::*}) times:
+				set line (15 - loop-number) of {_p}'s scoreboard to "%{_bounds::%loop-number%}%"
+	else:
+		set line 14 of {_p}'s scoreboard to "no bounds"
+
+function createBound(p: player, id: text, i: integer):
+	if {bounds::pos::%{_p}%::1} or {bounds::pos::%{_p}%::2} is not set:
+		send "&cBoth positions have to be set before you can create a bound!" to {_p}
+	else:
+		if isBound({_id}) is true:
+			send "&cThat bound ID is already being used!" to {_p}
+		else:
+			#MAYBE CHECK IF BOUNDS INTERSECTS ANOTHER BOUND AND ASK IF THEY WANT TO CONTINUE
+			if {_i} is 1:
+				create bound with id {_id} between {bounds::pos::%{_p}%::1} and {bounds::pos::%{_p}%::2}
+				set bound value "full" of bound with id {_id} to false
+				send "&aCreated bound with ID '%{_id}%'!" to {_p}
+			if {_i} is 2:
+				create full bound with id {_id} between {bounds::pos::%{_p}%::1} and {bounds::pos::%{_p}%::2}
+				set bound value "full" of bound with id {_id} to true
+				send "&aCreated full bound with ID '%{_id}%'!" to {_p}
+			set bound value "pos1" of bound with id {_id} to {bounds::pos::%{_p}%::1}
+			set bound value "pos2" of bound with id {_id} to {bounds::pos::%{_p}%::2}
+			set bound value "enterMsg" of bound with id {_id} to ""
+			set bound value "exitMsg" of bound with id {_id} to ""
+			set bound value "msgType" of bound with id {_id} to 1
+
+function deleteBound(p: player, id: text):
+	if isBound({_id}) is true:
+		delete bound with id {_id}
+		send "&aDeleted bound with ID '%{_id}%'!" to {_p}
+	else:
+		send "&cThere is no bound with ID '%{_id}%'!" to {_p}
+
+function boundInfo(p: player, id: text):
+	if isBound({_id}) is true:
+		set {_pos1} to bound value "pos1" of bound with id {_id}
+		set {_pos2} to bound value "pos2" of bound with id {_id}
+		set {_full} to bound value "full" of bound with id {_id}
+		set {_entermsg} to bound value "enterMsg" of bound with id {_id}
+		set {_exitmsg} to bound value "exitMsg" of bound with id {_id}
+		set {_msgtype} to bound value "msgType" of bound with id {_id}
+		send "&aBound info for bound with ID %{_id}%:" to {_p}
+		send "&aPosition 1: %{_pos1}%" to {_p}
+		send "&aPosition 2: %{_pos2}%" to {_p}
+		send "&aIs full: %{_full}%" to {_p}
+		send "&aEnter message: %{_entermsg}%" to {_p}
+		send "&aExit message: %{_exitmsg}%" to {_p}
+		send "&aMessage type: %{msgTypes::%{_msgtype}%}%" to {_p}
+	else:
+		send "&cThere is no bound with ID '%{_id}%'!" to {_p}
+
+function resizeBound(p: player, id: text, i: integer):
+	if isBound({_id}) is true:
+		if {_i} is 1:
+			#resize full bound bound with id {_id}
+			resize full bound bound with id {_id} between {bounds::pos::%{_p}%::1} and {bounds::pos::%{_p}%::2}
+			set bound value "full" of bound with id {_id} to true
+			send "&aResized the bound with ID '%{_id}%' to the height limits!" to {_p}
+		if {_i} is 2:
+			resize bound bound with id {_id} between {bounds::pos::%{_p}%::1} and {bounds::pos::%{_p}%::2}
+			set bound value "pos1" of bound with id {_id} to {bounds::pos::%{_p}%::1}
+			set bound value "pos2" of bound with id {_id} to {bounds::pos::%{_p}%::2}
+			set bound value "full" of bound with id {_id} to false
+			send "&aResized the bound with ID '%{_id}%' to your new positions!" to {_p}
+	else:
+		send "&cThere is no bound with ID '%{_id}%'!" to {_p}
+
+function boundOptions(p: player, id: text):
+	if isBound({_id}) is true:
+		set {_bound} to bound with id {_id}
+		set metadata tag "boundOptionsID" of {_p} to {_id}
+		set metadata tag "boundInventory" of {_p} to chest inventory with 1 rows named "Bound Options"
+		set {_full} to bound value "full" of bound with id {_id}
+		set {_entermsg} to bound value "enterMsg" of bound with id {_id}
+		set {_exitmsg} to bound value "exitMsg" of bound with id {_id}
+		set {_msgtype} to bound value "msgType" of bound with id {_id}
+		set slot 2 of metadata tag "boundInventory" of {_p} to oak sign named "&fSet enter message" with lore "&9Click &7to set the message a player will see when they enter this bound." and "&9Right click &7to see what it is currently set to."
+		set slot 3 of metadata tag "boundInventory" of {_p} to oak sign named "&fSet exit message" with lore "&9Click &7to set the message a player will see when they exit this bound." and "&9Right click &7to see what it is currently set to."
+		set slot 5 of metadata tag "boundInventory" of {_p} to paper named "&fSet message type" with lore "&9Click &7to change the type of message a player will see when they enter this bound." and "&7Currently set to: &a%{msgTypes::%{_msgtype}%}%"
+		open (metadata tag "boundInventory" of {_p}) to {_p}
+	else:
+		send "&cThere is no bound with ID '%{_id}%'!" to {_p}
+
+function drawLine(p: player, loc1: location, loc2: location):
+	set {_v} to vector from {_loc1} to {_loc2}
+	set vector length of {_v} to 0.1
+	loop floor((distance between {_loc1} and {_loc2}) / 0.1) times:
+		draw 20 of dust using dustOption(blue, 1) at {_loc1} with extra 0 with force for {_p}
+		set {_loc1} to {_loc1} ~ {_v}
+
+function showBoundOutline(p: player, id: text):
+	if isBound({_id}) is true:
+		set {_pos1} to (bound value "pos1" of bound with id {_id})
+		set {_pos2} to (bound value "pos2" of bound with id {_id})
+		set {_v1::initial} to vector from {_pos1} to {_pos2}
+		set {_v2::initial} to vector from {_pos2} to {_pos1}
+		set {_v::1} to vector(x of {_v1::initial}, 0, 0)
+		set {_v::2} to vector(0, y of {_v1::initial}, 0)
+		set {_v::3} to vector(0, 0, z of {_v1::initial})
+		set {_v::4} to vector(x of {_v2::initial}, 0, 0)
+		set {_v::5} to vector(0, y of {_v2::initial}, 0)
+		set {_v::6} to vector(0, 0, z of {_v2::initial})
+		loop {_v::*}:
+			drawLine({_p}, {_pos1}, ({_pos1} ~ loop-value)) if (loop-index parsed as integer) is 1, 2 or 3
+			drawLine({_p}, {_pos2}, ({_pos2} ~ loop-value)) if (loop-index parsed as integer) is 4, 5 or 6
+		#drawLine({_pos1}, ({_pos1} ~ {_v1}))
+
+		#set {_np1} to vector from {_pos1} to ({_pos1} ~ {_v1})
+		#BIOSPHERE ERRORS IN CONSOLE set {_outlines::*} to box outline between (bound value "pos1" of bound with id {_id}) and (bound value "pos2" of bound with id {_id}) with density 1
+	else:
+		send "&cThere is no bound with ID '%{_id}%'!" to {_p}
+
+on inventory click:
+	if name of player's current inventory is "Bound Options":
+		cancel event
+		set {_id} to metadata tag "boundOptionsID" of player
+		if event-slot is 2: #enter message
+			if event-clicktype is left mouse button:
+				set metadata tag "settingEnterMsg" of player to true
+				send "&aEnter a message in the chat to set it as the enter message."
+			else if event-clicktype is right mouse button:
+				if length of bound value "enterMsg" of bound with id {_id} <= 0:
+					send "&cThere is no enter message set for the bound with ID '%{_id}%'."
+				else if bound value "msgType" of bound with id {_id} <= 1:
+					send "&cThe message type for the bound with ID '%{_id}%' is set to 'off'."
+				else:
+					sendBoundMessage(player, {_id}, "enter")
+			close player's inventory
+		if event-slot is 3: #exit message
+			if event-clicktype is left mouse button:
+				set metadata tag "settingExitMsg" of player to true
+				send "&aEnter a message in the chat to set it as the exit message."
+			else if event-clicktype is right mouse button:
+				if length of bound value "exitMsg" of bound with id {_id} <= 0:
+					send "&cThere is no exit message set for the bound with ID '%{_id}%'."
+				else if bound value "msgType" of bound with id {_id} <= 1:
+					send "&cThe message type for the bound with ID '%{_id}%' is set to 'off'."
+				else:
+					sendBoundMessage(player, {_id}, "exit")
+			close player's inventory
+		if event-slot is 5:
+			if event-clicktype is left mouse button:
+				changeMessageType(player, {_id}, 1)
+			if event-clicktype is right mouse button:
+				changeMessageType(player, {_id}, -1)
+			set {_msgtype} to bound value "msgType" of bound with id {_id}
+			set slot 5 of player's current inventory to event-item with lore "&9Click &7to change the type of message a player will see when they enter this bound." and "&7Currently set to: &a%{msgTypes::%{_msgtype}%}%"
+
+on chat:
+	if metadata tag "settingEnterMsg" of player is true:
+		cancel event
+		set {_id} to metadata tag "boundOptionsID" of player
+		setEnterMessage(player, {_id}, formatted message)
+	if metadata tag "settingExitMsg" of player is true:
+		cancel event
+		set {_id} to metadata tag "boundOptionsID" of player
+		setExitMessage(player, {_id}, formatted message)
+
+function setEnterMessage(p: player, id: text, msg: text):
+	set bound value "enterMsg" of bound with id {_id} to {_msg}
+	clear metadata value "settingEnterMsg" of {_p}
+	send "&aSet the enter message of bound with ID %{_id}% to %{_msg}%&a." to {_p}
+
+function setExitMessage(p: player, id: text, msg: text):
+	set bound value "exitMsg" of bound with id {_id} to {_msg}
+	clear metadata value "settingExitMsg" of {_p}
+	send "&aSet the exit message of bound with ID %{_id}% to %{_msg}%&a." to {_p}
+
+function changeMessageType(p: player, id: text, inc: integer):
+	set {_i} to bound value "msgType" of bound with id {_id}
+	if {_i} + {_inc} <= 4:
+		if {_i} + {_inc} >= 1:
+			set {_i2} to {_i} + {_inc}
+			set bound value "msgType" of bound with id {_id} to {_i2}
+			send "&aChanged the message type for bound with ID '%{_id}%' to %{msgTypes::%{_i2}%}%." to {_p}
+		else:
+			send "&cCouldn't change the message type as it wasn't an option." to {_p}
+	else:
+		send "&cCouldn't change the message type as it wasn't an option." to {_p}
+
+function sendBoundMessage(p: player, id: text, ee: text):
+	if bound value "msgType" of bound with id {_id} >= 2:
+		if bound value "%{_ee}%Msg" of bound with id {_id} is set:
+			set {_msg} to bound value "%{_ee}%Msg" of bound with id {_id}
+			if bound value "msgType" of bound with id {_id} is 2:
+				send "%{_msg}%" to {_p}
+			if bound value "msgType" of bound with id {_id} is 3:
+				send title "%{_msg}%" to {_p}
+			if bound value "msgType" of bound with id {_id} is 4:
+				send action bar "%{_msg}%" to {_p}
+
+on bound enter:
+	if {bounds::scoreboard::%player%::toggle} is true:
+		wait 1 tick
+		updateBoundScoreboard(player)
+	sendBoundMessage(player, id of event-bound, "enter")
+
+on bound exit:
+	if {bounds::scoreboard::%player%::toggle} is true:
+		wait 1 tick
+		updateBoundScoreboard(player)
+	sendBoundMessage(player, id of event-bound, "exit")
