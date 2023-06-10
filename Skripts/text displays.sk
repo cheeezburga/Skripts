@@ -1,0 +1,58 @@
+command /textdisplay [<text>] [with id <text>] [at <text>]:
+    trigger:
+        if arg-1 is not set:
+            send "&cProvide a valid first argument."
+        else:
+            if arg-1 is "list":
+                if size of {displays::text::ids::*} >= 1:
+                    loop indexes of {displays::text::ids::*}:
+                        send "&aText displays currently registered:"
+                        set {_t} to text component from "&a - %loop-value%"
+                        set {_loc} to {displays::text::ids::%loop-value%}
+                        set {_x} to x-coordinate of {_loc}
+                        set {_y} to y-coordinate of {_loc}
+                        set {_z} to z-coordinate of {_loc}
+                        set hover event of {_t} to hover event showing "&7Set at (%{_x}%, %{_y}%, %{_z}%)." and "&7Click to teleport."
+                        set click event of {_t} to click event to suggest command "/tp %{_x}% %{_y}% %{_z}%"
+                        send component {_t} to player
+                else:
+                    send "&cNo text displays currently registered." 
+            else if arg-1 is "remove":
+                if arg-2 is not set:
+                    send "&cProvide a valid ID."
+                else:
+                    if indexes of {displays::text::ids::*} contains unformatted arg-2:
+                        kill nearest entity around {displays::text::ids::%unformatted arg-2%}
+                        clear {displays::text::ids::%arg-2%}
+                        send "&aRemoved the text with ID %unformatted arg-2%."
+                    else:
+                        send "&c'%unformatted arg-2%' is not a registered ID."
+            else:
+                if arg-2 is not set:
+                    send "&cProvide a valid ID."
+                else:
+                    if indexes of {displays::text::ids::*} contains unformatted arg-2:
+                        send "&cA text display is already registered with id '%unformatted arg-2%'."
+                    else:
+                        if arg-3 is not set:
+                            set {_l} to location of player
+                        else if arg-3 is "me" or "my location":
+                            set {_l} to location of player
+                        else if arg-3 is "target block" or "block":
+                            if player's target block is set:
+                                set {_l} to player's target block
+                            else:
+                                send "&cTarget block was not set, so defaulted to your location."
+                                set {_l} to location of player
+                        skbee spawn text display at {_l}
+                        set {_d} to last spawned entity
+                        set display billboard of {_d} to center
+                        set display text of {_d} to colored arg-1 split at "||"
+                        set {displays::text::ids::%unformatted arg-2%} to {_l}
+                        send "&aCreated text with ID '%unformatted arg-2%'."
+
+on tab complete of "/textdisplay":
+    set tab completions for position 1 to "just type the text to create", "remove" and "list"
+    if tab arg-1 is "remove":
+        loop indexes of {displays::text::ids::*}:
+            add "with id %loop-value%" to tab completions for position 2
