@@ -1,0 +1,183 @@
+#ITEM CASE
+
+options:
+	pb: &7&l[&b&lDisplay&7&l]
+	pickup-perm: display.pickup
+	place-perm: display.place
+	put-perm: display.put
+
+function noPermMessage(p: player):
+	send "{@pb} &cYou don't have permission to do this!" to {_p}
+
+function getDisplayCase(p: player):
+	set {_i} to glass named "&bDisplay Case" with lore "&7Place this to create a display case."
+	set int tag "displayCase" of nbt of {_i} to 1
+	give {_i} to {_p}
+
+function getChildOfInteraction(e: entity) :: entity:
+	set {_child} to uuid tag "custom;child" of nbt of {_e}
+	return ({_child} parsed as entity)
+
+function isInteraction(e: entity) :: boolean:
+	if nbt of {_e} has tag "custom;interaction":
+		return true
+	return false
+
+function hasItem(d: entity) :: boolean:
+	if nbt of {_d} has tag "custom;child;item":
+		return true
+	return false
+
+function createDisplayCase(p: player, b: block) :: entity:
+	skbee spawn block display at (exact location of {_b} ~ vector(0.15,0,0.15))
+	set {_d} to last spawned entity
+	set display block data of {_d} to glass
+	set display scale of {_d} to vector(0.7,0.7,0.7)
+	set int tag "custom;display" of nbt of {_d} to 1
+	return {_d}
+
+function createInteraction(b: block, child: entity):
+	skbee spawn interaction at (location of {_b} ~ vector(0,-0.5,0))
+	set {_d} to last spawned entity
+	set int tag "custom;interaction" of nbt of {_d} to 1
+	set uuid tag "custom;child" of nbt of {_d} to uuid of {_child}
+
+function pickupDisplay(p: player, d: entity):
+	set {_child} to getChildOfInteraction({_d})
+	if hasItem({_child}) is false:
+		kill {_child}
+		kill {_d}
+		getDisplayCase({_p})
+		send "&aPicked up a display case!" to {_p}
+	else:
+		send "{@pb} &cCannot pick up this display as it contains an item!" to {_p}
+
+function createItemDisplay(p: player, i: item, d: entity):
+	skbee spawn item display at {_d} ~ vector(0.35,0.35,0.35)
+	set {_ci} to last spawned entity
+	set display item of {_ci} to {_i}
+	set display scale of {_ci} to vector(0.5,0.5,0.5)
+	set display billboard of {_ci} to center
+	set uuid tag "custom;parentCase" of nbt of {_ci} to uuid of {_d}
+	set uuid tag "custom;owner" of nbt of {_ci} to uuid of {_p}
+	set uuid tag "custom;child;item" of nbt of {_d} to uuid of {_ci}
+
+function createItemName(p: player, i: item, d: entity):
+	skbee spawn text display at {_d} ~ vector(0.3,1.1,0.3)
+	set {_name} to last spawned entity
+	set {_namet} to (translate component of {_i}) if (name of {_i} is not set) else (name of {_i})
+	set display text of {_name} to ("&f%item amount of {_i}%x %{_namet}%" if (item amount of {_i} >= 2) else "&f%{_namet}%") and "&bby %{_p}%"
+	set display billboard of {_name} to center
+	set uuid tag "custom;parentCase" of nbt of {_ci} to uuid of {_d}
+	set uuid tag "custom;child;name" of nbt of {_d} to uuid of {_name}
+
+function updateItemName(p: player, d: entity):
+	set {_name} to (uuid tag "custom;child;name" of nbt of {_d}) parsed as entity
+	set {_item} to (uuid tag "custom;child;item" of nbt of {_d}) parsed as entity
+	set {_i} to display item of {_item}
+	set {_namet} to (translate component of {_i}) if (name of {_i} is not set) else (name of {_i})
+	set display text of {_name} to ("&f%item amount of {_i}%x %{_namet}%" if (item amount of {_i} >= 2) else "&f%{_namet}%") and "&bby %{_p}%"
+
+function placeItem(p: player, d: entity):
+	if {_p}'s tool is not air:
+		set {_i} to {_p}'s tool if ({_p} is sneaking) else 1 of {_p}'s tool
+		remove {_i} from {_p}
+		createItemDisplay({_p}, {_i}, {_d})
+		createItemName({_p}, {_i}, {_d})
+		send "{@pb} &aPlaced your item in the display case!" to {_p}
+	else:
+		send "{@pb} &cYou can't place nothing in the display case!" to {_p}
+
+function addItem(p: player, d: entity):
+	set {_item} to (uuid tag "custom;child;item" of nbt of {_d}) parsed as entity
+	if {_p} is (uuid tag "custom;owner" of nbt of {_item}) parsed as entity:
+		if {_p}'s tool is not air:
+			if (full nbt of (1 of display item of {_item})) is (full nbt of (1 of {_p}'s tool)):
+				set {_a} to (item amount of display item of {_item})
+				if {_a} + 1 >= 65:
+					send "{@pb} &cCannot add any more to this display case!" to {_p}
+				else:
+					remove 1 of {_p}'s tool from {_p}
+					set {_di} to display item of {_item}
+					add 1 to item amount of {_di}
+					set display item of {_item} to {_di}
+					updateItemName({_p}, {_d})
+			else:
+				send "{@pb} &cYou can't add other items to this display case!" to {_p}
+		else:
+			send "{@pb} &cYou can't add nothing to this display case!" to {_p}
+	else:
+		send "{@pb} &cYou're not the owner of this item!" to {_p}
+
+function takeItem(p: player, d: entity):
+	set {_child} to (uuid tag "custom;child;item" of nbt of {_d}) parsed as entity
+	if {_p} is (uuid tag "custom;owner" of nbt of {_child}) parsed as entity:
+		give (display item of {_child}) to {_p}
+		kill {_child}
+		kill (uuid tag "custom;child;name" of nbt of {_d}) parsed as entity
+		delete tag "custom;child" of nbt of {_d}
+		send "{@pb} &aYou took the item in the display case!" to {_p}
+	else:
+		send "{@pb} &cYou're not the owner of this item!" to {_p}
+
+function showCaseGUI(p: player, d: entity):
+	set {_child} to (uuid tag "custom;child;item" of nbt of {_d}) parsed as entity
+	set {_i} to display item of {_child}
+	create gui with virtual chest inventory with 1 row named "Display Case":
+		format gui slot (integers from 0 to 3) and (integers from 5 to 8) with black stained glass pane named "&0"
+		format gui slot 4 with {_i}
+	open last gui to {_p}
+
+on place:
+	if nbt of player's tool has tag "displayCase":
+		if player has permission "{@place-perm}":
+			cancel event
+			remove 1 of player's tool from player
+			set {_d} to createDisplayCase(player, event-block)
+			createInteraction(event-block, {_d})
+		else:
+			noPermMessage(player)
+
+on damage:
+	if isInteraction(victim) is true:
+		cancel event
+		if attacker is sneaking:
+			if attacker has permission "{@pickup-perm}":
+				pickupDisplay(attacker, victim)
+			else:
+				noPermMessage(attacker)
+		else:
+			set {_child} to getChildOfInteraction(victim)
+			if hasItem({_child}) is true:
+				showCaseGUI(attacker, {_child})
+
+on right click on entity:
+	#broadcast "Right click: %(clicked entity).getType()%"
+	if isInteraction(clicked entity) is true:
+		cancel event
+		if player has permission "{@put-perm}":
+			set {_child} to getChildOfInteraction(clicked entity)
+			if player is sneaking:
+				if hasItem({_child}) is true:
+					addItem(player, {_child})
+				else:
+					placeItem(player, {_child})
+			else:
+				if hasItem({_child}) is true:
+					takeItem(player, {_child})
+				else:
+					placeItem(player, {_child})
+		else:
+			noPermMessage(player)
+
+command /display [<text>]:
+	aliases: /displaycase, /case, /itemcase
+	trigger:
+		if arg-1 is not set:
+			send "{@pb} &aDisplay cases by cheeezburga"
+		else:
+			if arg-1 is "give" or "get":
+				getDisplayCase(player)
+			else if arg-1 is "place" or "put":
+				if isInteraction(target entity) is true:
+					placeItem(player, target entity)
