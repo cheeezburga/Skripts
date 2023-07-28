@@ -2,9 +2,21 @@
 
 options:
 	pb: &7&l[&b&lDisplay&7&l]
-	pickup-perm: display.pickup
+	give-perm: display.give
 	place-perm: display.place
 	put-perm: display.put
+
+# ADD ABILITY TO STORE MULTIPLE ITEMS IN A DISPLAY CASE
+# EITHER PICK ITEM TO DISPLAY OR ROTATE THROUGH
+
+on entity remove from world:
+	if nbt of event-entity has tag "custom;child;item":
+		set {_item} to (uuid tag "custom;child;item" of nbt of event-entity) parsed as entity
+		set {_owner} to (uuid tag "custom;owner" of nbt of {_item}) parsed as entity
+		add (display item of {_item}) to {display::%{_owner}%::heldItems::*}
+
+on join:
+	send "{@pb} &aA display case that held one of your items was removed. Use &b/display items &ato get your item(s) back." if (size of {display::%player%::heldItems::*} >= 1)
 
 function noPermMessage(p: player):
 	send "{@pb} &cYou don't have permission to do this!" to {_p}
@@ -61,6 +73,9 @@ function createItemDisplay(p: player, i: item, d: entity):
 	set uuid tag "custom;parentCase" of nbt of {_ci} to uuid of {_d}
 	set uuid tag "custom;owner" of nbt of {_ci} to uuid of {_p}
 	set uuid tag "custom;child;item" of nbt of {_d} to uuid of {_ci}
+	set byte tag "custom;options;current" of nbt of {_ci} to 1
+	set byte tag "custom;options;billboard" of nbt of {_ci} to 1
+	set byte tag "custom;options;showName" of nbt of {_ci} to 1
 
 function createItemName(p: player, i: item, d: entity):
 	skbee spawn text display at {_d} ~ vector(0.3,1.1,0.3)
@@ -120,13 +135,84 @@ function takeItem(p: player, d: entity):
 	else:
 		send "{@pb} &cYou're not the owner of this item!" to {_p}
 
-function showCaseGUI(p: player, d: entity):
+function openCaseGUI(p: player, d: entity):
 	set {_child} to (uuid tag "custom;child;item" of nbt of {_d}) parsed as entity
+	set {_owner} to (uuid tag "custom;owner" of nbt of {_child}) parsed as entity
 	set {_i} to display item of {_child}
 	create gui with virtual chest inventory with 1 row named "Display Case":
-		format gui slot (integers from 0 to 3) and (integers from 5 to 8) with black stained glass pane named "&0"
+		format gui slot (integers from 0 to 3) and (integers from 5 to 7) with black stained glass pane named "&0"
 		format gui slot 4 with {_i}
+		format gui slot 8 with blue stained glass pane named "&bOptions" with lore optionsLore({_child}):
+			if {_owner} is {_p}:
+				if gui click type is left mouse button:
+					cycleOptions({_p}, {_child})
+				else if gui click type is right mouse button:
+					cycleOptionSettings({_p}, {_child})
+			else:
+				send "{@pb} &cCannot edit the display case if you are not the owner!" to {_p}
 	open last gui to {_p}
+
+function optionsLore(d: entity) :: strings:
+	set {_current} to byte tag "custom;options;current" of nbt of {_d}
+	set {_billboard} to "center" if ((byte tag "custom;options;billboard" of nbt of {_d}) is 1)
+	set {_billboard} to "fixed" if ((byte tag "custom;options;billboard" of nbt of {_d}) is 2)
+	set {_showName} to true if ((byte tag "custom;options;showName" of nbt of {_d}) is 1) else false
+	set {_lore::*} to "&fBillboard: &7%{_billboard}%" and "&fShow name: &7%{_showName}%"
+	replace all "&f" in {_lore::%{_current}%} with "&9"
+	return {_lore::*}
+
+function cycleOptions(p: player, d: entity):
+	set {_current} to byte tag "custom;options;current" of nbt of {_d}
+	if {_current} <= 1:
+		add 1 to (byte tag "custom;options;current" of nbt of {_d})
+	else:
+		set (byte tag "custom;options;current" of nbt of {_d}) to 1
+	set lore of slot 8 of {_p}'s top inventory to optionsLore({_d})
+
+function cycleOptionSettings(p: player, d: entity):
+	set {_current} to byte tag "custom;options;current" of nbt of {_d}
+	set {_option} to "billboard" if {_current} is 1
+	set {_option} to "showName" if {_current} is 2
+	changeOption({_option}, {_d})
+	set lore of slot 8 of {_p}'s top inventory to optionsLore({_d})
+
+function changeOption(o: text, d: entity):
+	if {_o} is "billboard":
+		if (byte tag "custom;options;billboard" of nbt of {_d}) is 1: #is center
+			add 1 to byte tag "custom;options;billboard" of nbt of {_d}
+			set display billboard of {_d} to fixed
+		else if (byte tag "custom;options;billboard" of nbt of {_d}) is 2: #is fixed
+			subtract 1 from byte tag "custom;options;billboard" of nbt of {_d}
+			set display billboard of {_d} to center
+	else if {_o} is "showName":
+		set {_parent} to (uuid tag "custom;parentCase" of nbt of {_d}) parsed as entity
+		if (byte tag "custom;options;showName" of nbt of {_d}) is 1:
+			add 1 to byte tag "custom;options;showName" of nbt of {_d}
+			set {_name} to (uuid tag "custom;child;name" of nbt of {_parent}) parsed as entity
+			kill {_name}
+		else if (byte tag "custom;options;showName" of nbt of {_d}) is 2:
+			subtract 1 from byte tag "custom;options;showName" of nbt of {_d}
+			set {_item} to (uuid tag "custom;child;item" of nbt of {_parent}) parsed as entity
+			set {_owner} to (uuid tag "custom;owner" of nbt of {_item}) parsed as offline player
+			createItemName({_owner}, (display item of {_item}), {_parent})
+
+function openHeldItems(p: player):
+	if (size of {display::%{_p}%::heldItems::*}) >= 1:
+		create gui with virtual chest inventory with 3 rows named "Your Held Items":
+			set {_s} to 0
+			loop {display::%{_p}%::heldItems::*}:
+				format gui slot {_s} with stealable loop-value
+				add 1 to {_s}
+		open last gui to {_p}
+	else:
+		send "{@pb} &aYou don't have any held items." to {_p}
+
+on inventory close:
+	if name of event-inventory is "Your Held Items":
+		clear {display::%player%::heldItems::*}
+		loop items in event-inventory:
+			add loop-value to {display::%player%::heldItems::*}
+		add player's cursor slot to {display::%player%::heldItems::*} if (player's cursor slot is not air)
 
 on place:
 	if nbt of player's tool has tag "displayCase":
@@ -138,18 +224,18 @@ on place:
 		else:
 			noPermMessage(player)
 
-on damage:
+on damage of entity:
 	if isInteraction(victim) is true:
 		cancel event
 		if attacker is sneaking:
-			if attacker has permission "{@pickup-perm}":
+			if attacker has permission "{@place-perm}":
 				pickupDisplay(attacker, victim)
 			else:
 				noPermMessage(attacker)
 		else:
 			set {_child} to getChildOfInteraction(victim)
 			if hasItem({_child}) is true:
-				showCaseGUI(attacker, {_child})
+				openCaseGUI(attacker, {_child})
 
 on right click on entity:
 	#broadcast "Right click: %(clicked entity).getType()%"
@@ -170,6 +256,9 @@ on right click on entity:
 		else:
 			noPermMessage(player)
 
+on tab complete of "/display":
+	set tab completions for position 1 to "give"
+
 command /display [<text>]:
 	aliases: /displaycase, /case, /itemcase
 	trigger:
@@ -177,7 +266,13 @@ command /display [<text>]:
 			send "{@pb} &aDisplay cases by cheeezburga"
 		else:
 			if arg-1 is "give" or "get":
-				getDisplayCase(player)
-			else if arg-1 is "place" or "put":
-				if isInteraction(target entity) is true:
-					placeItem(player, target entity)
+				if player has permission "{@give-perm}":
+					getDisplayCase(player)
+					send "{@pb} &aGave you a display case!"
+				else:
+					noPermMessage(player)
+			else if arg-1 is "items":
+				if player has permission "{@put-perm}":
+					openHeldItems(player)
+				else:
+					noPermMessage(player)
