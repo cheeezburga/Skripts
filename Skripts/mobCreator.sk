@@ -1,3 +1,10 @@
+# add permissions
+# add check to see if enchant can be applied. loop enchantments of item and use method Enchantment#conflictsWith
+# maybe allow for mobs to have the same name
+# add viewing all the registered mobs and deleting specific mobs
+# add timestamp for when mob was registered, might be useful stat to have
+# every time a mob is spawned, add 1 to a tag which holds the number of times its been spawned
+
 function getMobTypes() :: entity types:
 	set {_t::*} to ("zombie", "zombie villager", "husk", "skeleton", "stray", "wither skeleton", "piglin")
 	loop {_t::*}:
@@ -10,12 +17,15 @@ function getEnchantments(i: item) :: enchantments:
 			add loop-value to {_enchants::*}
 	return {_enchants::*}
 
-function getCreatedMobs() :: strings:
+function getCreatedMobs(colored: int = 0) :: strings:
 	set {_n} to nbt from file "plugins/Skript/mobCreator/mobs.dat"
 	set {_mobs::*} to compound list tag "mobs" of {_n}
 	loop {_mobs::*}:
 		set {_name} to (string tag "name" of loop-value)
-		add unformatted {_name} to {_created::*}
+		if {_colored} is 0:
+			add unformatted {_name} to {_created::*}
+		else:
+			add {_name} to {_created::*}
 	return {_created::*}
 
 function getCreatedMob(n: text) :: nbt compound:
@@ -23,20 +33,53 @@ function getCreatedMob(n: text) :: nbt compound:
 	set {_mobs::*} to compound list tag "mobs" of {_nbt}
 	loop {_mobs::*}:
 		set {_name} to (string tag "name" of loop-value)
-		if unformatted {_name} is {_n}:
+		if unformatted {_name} is unformatted {_n}:
 			return loop-value
+
+function getRestrictedMiddleSlots(i: int) :: integers:
+	if {_i} is 1:
+		return (10,11,12,14,15,16)
+	else if {_i} is 2:
+		return (10,11,13,15,16)
+	else if {_i} is 3:
+		return (10,11,15,16)
+	else if {_i} is 4:
+		return (10,13,16)
+	else if {_i} is 5:
+		return (10,16)
+
+function getGraySlots(size: int) :: ints:
+	if {_size} is 3:
+		set {_slots::*} to ((integers from 0 to 9) and (integers from 17 to 26))
+	else if {_size} is 4:
+		set {_slots::*} to ((integers from 0 to 9),17,18 and (integers from 26 to 35))
+	else if {_size} is 5:
+		set {_slots::*} to ((integers from 0 to 9),17,18,26,27 and (integers from 35 to 44))
+	else if {_size} is 6:
+		set {_slots::*} to ((integers from 0 to 9),17,18,26,27,35,36 and (integers from 44 to 53))
+	return {_slots::*}
+
+function getRedSlot(size: int) :: int:
+	if {_size} is 3:
+		return 22
+	else if {_size} is 4:
+		return 31
+	else if {_size} is 5:
+		return 40
+	else if {_size} is 6:
+		return 49
 
 function chooseType(p: player):
 	close {_p}'s inventory
 	create gui with virtual chest inventory named "Mob Creator | Type" with 3 rows:
-		format gui slot ((integers from 0 to 9),17 and (integers from 19 to 26)) with black stained glass pane named "&0"
+		format gui slot getGraySlots(3) with black stained glass pane named "&0"
+		format gui slot getRedSlot(3) with red stained glass pane named "&c&lCancel":
+			openGui({_p})
 		loop getMobTypes():
 			set {_name} to "%loop-value%" in proper case
 			format next gui slot with ("%loop-value% spawn egg" parsed as item) named ("&f%{_name}%"):
 				set (metadata tag "guiType" of {_p}) to (unformatted (name of gui item in lower case))
 				openGui({_p})
-		format gui slot 18 with red stained glass pane named "&cCancel":
-			openGui({_p})
 	open last gui to {_p}
 
 function chooseName(p: player):
@@ -71,64 +114,64 @@ function chooseHelmet(p: player):
 	close {_p}'s inventory
 	set {_helmets::*} to turtle helmet, leather helmet, chainmail helmet, gold helmet, iron helmet, diamond helmet, netherite helmet
 	create gui with virtual chest inventory named "Mob Creator | Helmet" with 3 rows:
-		format gui slot ((integers from 0 to 9),17 and (integers from 19 to 26)) with black stained glass pane named "&0"
+		format gui slot getGraySlots(3) with black stained glass pane named "&0"
+		format gui slot getRedSlot(3) with red stained glass pane named "&c&lCancel":
+			openGui({_p})
 		loop {_helmets::*}:
 			set {_name} to "%loop-value%" in proper case
 			format next gui slot with loop-value named "&f%{_name}%":
 				set (metadata tag "guiHelmet" of {_p}) to (gui item)
 				openGui({_p})
-		format gui slot 18 with red stained glass pane named "&cCancel":
-			openGui({_p})
 	open last gui to {_p}
 
 function chooseChestplate(p: player):
 	close {_p}'s inventory
 	set {_chestplates::*} to leather chestplate, chainmail chestplate, gold chestplate, iron chestplate, diamond chestplate, netherite chestplate
 	create gui with virtual chest inventory named "Mob Creator | Chestplate" with 3 rows:
-		format gui slot ((integers from 0 to 9),13,17 and (integers from 19 to 26)) with black stained glass pane named "&0"
+		format gui slot (getGraySlots(3) and 13) with black stained glass pane named "&0"
+		format gui slot getRedSlot(3) with red stained glass pane named "&c&lCancel":
+			openGui({_p})
 		loop {_chestplates::*}:
 			set {_name} to "%loop-value%" in proper case
 			format next gui slot with loop-value named "&f%{_name}%":
 				set (metadata tag "guiChestplate" of {_p}) to (gui item)
 				openGui({_p})
-		format gui slot 18 with red stained glass pane named "&cCancel":
-			openGui({_p})
 	open last gui to {_p}
 
 function chooseLeggings(p: player):
 	close {_p}'s inventory
 	set {_leggings::*} to leather leggings, chainmail leggings, gold leggings, iron leggings, diamond leggings, netherite leggings
 	create gui with virtual chest inventory named "Mob Creator | Leggings" with 3 rows:
-		format gui slot ((integers from 0 to 9),13,17 and (integers from 19 to 26)) with black stained glass pane named "&0"
+		format gui slot (getGraySlots(3) and 13) with black stained glass pane named "&0"
+		format gui slot getRedSlot(3) with red stained glass pane named "&c&lCancel":
+			openGui({_p})
 		loop {_leggings::*}:
 			set {_name} to "%loop-value%" in proper case
 			format next gui slot with loop-value named "&f%{_name}%":
 				set (metadata tag "guiLeggings" of {_p}) to (gui item)
 				openGui({_p})
-		format gui slot 18 with red stained glass pane named "&cCancel":
-			openGui({_p})
 	open last gui to {_p}
 
 function chooseBoots(p: player):
 	close {_p}'s inventory
 	set {_boots::*} to leather boots, chainmail boots, gold boots, iron boots, diamond boots, netherite boots
 	create gui with virtual chest inventory named "Mob Creator | Boots" with 3 rows:
-		format gui slot ((integers from 0 to 9),13,17 and (integers from 19 to 26)) with black stained glass pane named "&0"
+		format gui slot (getGraySlots(3) and 13) with black stained glass pane named "&0"
+		format gui slot getRedSlot(3) with red stained glass pane named "&c&lCancel":
+			openGui({_p})
 		loop {_boots::*}:
 			set {_name} to "%loop-value%" in proper case
 			format next gui slot with loop-value named "&f%{_name}%":
 				set (metadata tag "guiBoots" of {_p}) to (gui item)
 				openGui({_p})
-		format gui slot 18 with red stained glass pane named "&cCancel":
-			openGui({_p})
 	open last gui to {_p}
 
 function chooseWeapon(p: player):
 	close {_p}'s inventory
 	set {_weapons::*} to bow, wooden sword, stone sword, gold sword, iron sword, diamond sword, netherite sword
 	create gui with virtual chest inventory named "Mob Creator | Weapons" with 3 rows:
-		format gui slot ((integers from 0 to 9),17 and (integers from 19 to 26)) with black stained glass pane named "&0"
-		format gui slot 18 with red stained glass pane named "&cCancel":
+		format gui slot getGraySlots(3) with black stained glass pane named "&0"
+		format gui slot getRedSlot(3) with red stained glass pane named "&c&lCancel":
 			openGui({_p})
 		loop {_weapons::*}:
 			set {_name} to "%loop-value%" in proper case
@@ -146,46 +189,33 @@ function chooseEnchant(p: player, t: text):
 	set {_t} to "weapon" if ({_t} is "bow" or "sword")
 	set {_size} to ceil(size of {_enchants::*} / 7) + 2
 	create gui with virtual chest inventory named "Mob Creator | Enchants" with {_size} rows:
-		set {_slots::*} to ((integers from 0 to 9),17,18,26 and (integers from 28 to 35)) if {_size} is 4 else ((integers from 0 to 9) and (integers from 17 to 26))
-		format gui slot {_slots::*} with black stained glass pane named "&0"
-		format gui slot 27 with red stained glass pane named "&cCancel":
+		format gui slot getGraySlots({_size}) with black stained glass pane named "&0"
+		format gui slot getRedSlot({_size}) with red stained glass pane named "&c&lCancel":
 			openGui({_p})
 		loop {_enchants::*}:
 			set {_i} to enchanted book
 			set {_enchant} to loop-value
 			add loop-value to enchantments of {_i}
 			format next gui slot with {_i} named "&f%{_enchant}%" with enchants flag hidden:
-				enchant (metadata tag "gui%{_t} in proper case%" of {_p}) with {_enchant}
 				chooseLevel({_p}, {_enchant}, {_t})
 	open last gui to {_p}
-
-function getMiddleSlots(i: int) :: integers:
-	if {_i} is 1:
-		return (10,11,12,14,15,16)
-	else if {_i} is 2:
-		return (10,11,13,15,16)
-	else if {_i} is 3:
-		return (10,11,15,16)
-	else if {_i} is 4:
-		return (10,13,16)
-	else if {_i} is 5:
-		return (10,16)
 
 function chooseLevel(p: player, e: enchantment, t: text):
 	close {_p}'s inventory
 	set {_max} to {_e}.getMaxLevel()
 	add 1 to {_i}
 	create gui with virtual chest inventory named "Mob Creator | Level" with 3 rows:
-		format gui slot ((integers from 0 to 9),17 and (integers from 19 to 26)) with black stained glass pane named "&0"
-		format gui slot 18 with red stained glass pane named "&cCancel":
+		format gui slot getGraySlots(3) with black stained glass pane named "&0"
+		format gui slot getRedSlot(3) with red stained glass pane named "&cCancel":
 			openGui({_p})
-		format gui slot (getMiddleSlots({_max})) with black stained glass pane named "&0"
+		format gui slot (getRestrictedMiddleSlots({_max})) with black stained glass pane named "&0"
 		loop {_max} times:
 			set {_i} to enchanted book
 			set {_level} to loop-value
 			set {_enchant} to {_e}
 			format next gui slot with {_i} named "&f%{_enchant}% %{_level}%":
 				set {_i} to (metadata tag "gui%{_t} in proper case%" of {_p})
+				enchant (metadata tag "gui%{_t} in proper case%" of {_p}) with {_enchant}
 				set enchantment level of {_enchant} on {_i} to {_level}
 				set (metadata tag "gui%{_t} in proper case%" of {_p}) to {_i}
 				openGui({_p})
@@ -213,7 +243,7 @@ function submitMob(p: player):
 		set {_mobNbt} to empty nbt compound
 		set {_name} to (metadata tag "guiName" of {_p})
 		set (uuid tag "uuid" of {_mobNbt}) to random uuid
-		set (string tag "name" of {_mobNbt}) to (metadata tag "guiName" of {_p})
+		set (string tag "name" of {_mobNbt}) to {_name}
 		set (int tag "health" of {_mobNbt}) to (metadata tag "guiHealth" of {_p}) if (metadata tag "guiHealth" of {_p} is set) else 20
 		set (string tag "type" of {_mobNbt}) to (metadata tag "guiType" of {_p})
 		set (compound tag "equip;helmet" of {_mobNbt}) to full nbt of (metadata tag "guiHelmet" of {_p})
@@ -256,7 +286,7 @@ function openGui(p: player):
 			if (gui click type) is left mouse button:
 				chooseHelmet({_p})
 			else if (gui click type) is right mouse button:
-				chooseEnchant({_p}, "helmet")
+				chooseEnchant({_p}, "helmet") if (gui item) is not gray dye
 			else if (gui click type) is middle mouse button:
 				clear (metadata tag "guiHelmet" of {_p})
 				set gui item to getGuiItem({_p}, "helmet")
@@ -264,7 +294,7 @@ function openGui(p: player):
 			if (gui click type) is left mouse button:
 				chooseChestplate({_p})
 			else if (gui click type) is right mouse button:
-				chooseEnchant({_p}, "chestplate")
+				chooseEnchant({_p}, "chestplate") if (gui item) is not gray dye
 			else if (gui click type) is middle mouse button:
 				clear (metadata tag "guiChestplate" of {_p})
 				set gui item to getGuiItem({_p}, "chestplate")
@@ -272,7 +302,7 @@ function openGui(p: player):
 			if (gui click type) is left mouse button:
 				chooseLeggings({_p})
 			else if (gui click type) is right mouse button:
-				chooseEnchant({_p}, "leggings")
+				chooseEnchant({_p}, "leggings") if (gui item) is not gray dye
 			else if (gui click type) is middle mouse button:
 				clear (metadata tag "guiLeggings" of {_p})
 				set gui item to getGuiItem({_p}, "leggings")
@@ -280,7 +310,7 @@ function openGui(p: player):
 			if (gui click type) is left mouse button:
 				chooseBoots({_p})
 			else if (gui click type) is right mouse button:
-				chooseEnchant({_p}, "boots")
+				chooseEnchant({_p}, "boots") if (gui item) is not gray dye
 			else if (gui click type) is middle mouse button:
 				clear (metadata tag "guiBoots" of {_p})
 				set gui item to getGuiItem({_p}, "boots")
@@ -288,7 +318,7 @@ function openGui(p: player):
 			if (gui click type) is left mouse button:
 				chooseWeapon({_p})
 			else if (gui click type) is right mouse button:
-				chooseEnchant({_p}, ("sword" if (gui item is any sword) else "bow"))
+				chooseEnchant({_p}, ("sword" if (gui item is any sword) else "bow")) if (gui item) is not gray dye
 			else if (gui click type) is middle mouse button:
 				clear (metadata tag "guiWeapon" of {_p})
 				set gui item to getGuiItem({_p}, "weapon")
@@ -318,8 +348,58 @@ function spawnMob(p: player, n: nbt compound):
 		set tool of event-entity to (item from nbt {_weapon})
 	send "&aSpawned %formatted {_name}% &aat your location." to {_p}
 
+function showMobs(p: player, page: int = 1):
+	set {_mobs::*} to getCreatedMobs(1)
+	set {_total} to size of {_mobs::*}
+	if {_total} >= 1:
+		close {_p}'s inventory
+		clear (metadata tag "pageBeforeExiting" of {_p})
+		set {_mobs::*} to getCreatedMobs(1)
+		set {_total} to size of {_mobs::*}
+		set {_nextPage} to ({_page} + 1) if ({_total} > {_page} * 28)
+		set {_prevPage} to ({_page} - 1) if {_page} >= 2
+		set {_index} to (({_page} - 1) * 28) + 1
+		set {_i} to min(28, ({_total} - {_index} + 1))
+		set {_size} to ceil({_i} / 7) + 2
+		create gui with virtual chest inventory named "Registered Mobs" with {_size} rows:
+			format gui slot getGraySlots({_size}) with black stained glass pane named "&0"
+			format gui slot getRedSlot({_size}) with red stained glass pane named "&c&lExit":
+				close {_p}'s inventory
+			loop {_i} times:
+				set {_mob} to getCreatedMob({_mobs::%{_index}%})
+				set {_name} to string tag "name" of {_mob}
+				format next gui slot with zombie head named {_name}:
+					set metadata tag "pageBeforeExiting" of {_p} to {_page}
+					showMob({_p}, {_mob})
+				add 1 to {_index}
+			if {_nextPage} is set:
+				format gui slot 51 with arrow named "&b&lNext page":
+					showMobs({_p}, ("%{_nextPage}%" parsed as integer))
+			if {_prevPage} is set:
+				format gui slot (({_size} * 9) - 7) with arrow named "&b&lPrevious page":
+					showMobs({_p}, ("%{_prevPage}%" parsed as integer))
+		open last gui to {_p}
+	else:
+		send "&cThere don't seem to be any registered mobs. Use &b/mob create &cto make some." to {_p}
+
+function showMob(p: player, m: nbt compound):
+	close {_p}'s inventory
+	set {_name} to (string tag "name" of {_m})
+	set {_type} to (string tag "type" of {_m})
+	set {_health} to (int tag "health" of {_m})
+	loop ("helmet", "chestplate", "leggings", "boots", "weapon"):
+		set {_e.%loop-value%} to (compound tag "equip;%loop-value%" of {_m})
+		set {_e.%loop-value%} to (nbt item from {_e.%loop-value%}) if ("%{_e.%loop-value%}%" is not "{}") else (gray dye)
+	create gui with virtual chest inventory named "Registered Mobs | %unformatted {_name}%" with 3 rows:
+		format gui slot (getGraySlots(3),10 and 16) with black stained glass pane named "&0"
+		loop ("helmet", "chestplate", "leggings", "boots", "weapon"):
+			format next gui slot with {_e.%loop-value%} named "&f%loop-value in proper case%"
+		format gui slot getRedSlot(3) with red stained glass pane named "&c&lBack":
+			showMobs({_p}, (metadata tag "pageBeforeExiting" of {_p}))
+	open last gui to {_p}
+
 on tab complete of "/mob":
-	set tab completions for position 1 to "create" and "spawn"
+	set tab completions for position 1 to "create", "spawn", "show"
 	if tab arg-1 is "create":
 		set tab completions for position 2 to getMobTypes()
 	else if tab arg-1 is "spawn":
@@ -334,7 +414,7 @@ command /mob <text> [<text>]:
 					if arg-2 is set:
 						if (arg-2 parsed as entity type) is set:
 							if getMobTypes() contains (arg-2 parsed as entity type):
-								set (metadata tag "guiType" of player) to (arg-2 parsed as entity type)
+								set (metadata tag "guiType" of player) to unformatted arg-2
 							else:
 								send "&c%arg-2 in proper case% is not a valid entity type. Available types are listed as command completions."
 								stop
@@ -351,5 +431,7 @@ command /mob <text> [<text>]:
 				spawnMob(player, getCreatedMob(arg-2))
 			else:
 				send "&c%arg-2% doesn't seem to be a created mob. Registered mobs are listed as command completions."
+		else if arg-1 is "show" or "view":
+			showMobs(player)
 		else:
 			send "&c%arg-1% is not a valid argument. Try &bcreate &cor &bspawn&c."
