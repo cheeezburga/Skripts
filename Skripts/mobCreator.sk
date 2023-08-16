@@ -17,7 +17,11 @@ function getEnchantments(i: item) :: enchantments:
 			add loop-value to {_enchants::*}
 	return {_enchants::*}
 
-function getCreatedMobs(colored: int = 0) :: strings:
+function getCreatedMobs() :: nbt compounds:
+	set {_n} to nbt from file "plugins/Skript/mobCreator/mobs.dat"
+	return (compound list tag "mobs" of {_n})
+
+function getCreatedMobNames(colored: int = 0) :: strings:
 	set {_n} to nbt from file "plugins/Skript/mobCreator/mobs.dat"
 	set {_mobs::*} to compound list tag "mobs" of {_n}
 	loop {_mobs::*}:
@@ -96,7 +100,7 @@ on chat:
 	if (metadata tag "guiNaming" of player) is true:
 		cancel event
 		if message is not "cancel":
-			if getCreatedMobs() doesn't contain unformatted message:
+			if getCreatedMobNames() doesn't contain unformatted message:
 				set (metadata tag "guiName" of player) to formatted message
 			else:
 				send "&c%unformatted message% is already a taken name. Type another one in chat."
@@ -349,19 +353,19 @@ function spawnMob(p: player, n: nbt compound):
 	send "&aSpawned %formatted {_name}% &aat your location." to {_p}
 
 function showMobs(p: player, page: int = 1):
-	set {_mobs::*} to getCreatedMobs(1)
+	set {_mobs::*} to getCreatedMobNames(1)
 	set {_total} to size of {_mobs::*}
 	if {_total} >= 1:
 		close {_p}'s inventory
 		clear (metadata tag "pageBeforeExiting" of {_p})
-		set {_mobs::*} to getCreatedMobs(1)
+		set {_mobs::*} to getCreatedMobNames(1)
 		set {_total} to size of {_mobs::*}
 		set {_nextPage} to ({_page} + 1) if ({_total} > {_page} * 28)
 		set {_prevPage} to ({_page} - 1) if {_page} >= 2
 		set {_index} to (({_page} - 1) * 28) + 1
 		set {_i} to min(28, ({_total} - {_index} + 1))
 		set {_size} to ceil({_i} / 7) + 2
-		create gui with virtual chest inventory named "Registered Mobs" with {_size} rows:
+		create gui with virtual chest inventory named "Registered Mobs | Page %{_page}%" with {_size} rows:
 			format gui slot getGraySlots({_size}) with black stained glass pane named "&0"
 			format gui slot getRedSlot({_size}) with red stained glass pane named "&c&lExit":
 				close {_p}'s inventory
@@ -382,20 +386,41 @@ function showMobs(p: player, page: int = 1):
 	else:
 		send "&cThere don't seem to be any registered mobs. Use &b/mob create &cto make some." to {_p}
 
+function deleteMob(p: player, m: nbt compound):
+	close {_p}'s inventory
+	set {_mobs::*} to getCreatedMobs()
+	remove {_m} from {_mobs::*}
+	set {_n} to nbt from file "plugins/Skript/mobCreator/mobs.dat"
+	set compound list tag "mobs" of {_n} to {_mobs::*}
+	save nbt file of {_n}
+	if size of {_mobs::*} >= 1:
+		showMobs({_p}, metadata tag "pageBeforeExiting" of {_p})
+	else:
+		send "&cTried to reopen the registered mobs GUI, but none were registered." to {_p}
+
+function editMob(p: player, m: nbt compound):
+	broadcast "editMob()"
+
 function showMob(p: player, m: nbt compound):
 	close {_p}'s inventory
 	set {_name} to (string tag "name" of {_m})
 	set {_type} to (string tag "type" of {_m})
 	set {_health} to (int tag "health" of {_m})
 	loop ("helmet", "chestplate", "leggings", "boots", "weapon"):
-		set {_e.%loop-value%} to (compound tag "equip;%loop-value%" of {_m})
+		set {_e.%loop-value%} to (compound tag "equip;%loop-value%" of {_m}) if ({_m} has tag "equip;%loop-value%") else empty nbt compound
 		set {_e.%loop-value%} to (nbt item from {_e.%loop-value%}) if ("%{_e.%loop-value%}%" is not "{}") else (gray dye)
-	create gui with virtual chest inventory named "Registered Mobs | %unformatted {_name}%" with 3 rows:
-		format gui slot (getGraySlots(3),10 and 16) with black stained glass pane named "&0"
-		loop ("helmet", "chestplate", "leggings", "boots", "weapon"):
-			format next gui slot with {_e.%loop-value%} named "&f%loop-value in proper case%"
-		format gui slot getRedSlot(3) with red stained glass pane named "&c&lBack":
+	create gui with virtual chest inventory named "Registered Mobs | %unformatted {_name}%" with 5 rows:
+		format gui slot ((integers from 0 to 8),12,(integers from 18 to 26),27,28,29,33,34,35 and (integers from 36 to 45)) with black stained glass pane named "&0"
+		format gui slot 9 with name tag named "&fName: %{_name}%"
+		format gui slot 10 with zombie spawn egg named "&fType: &a%{_type}%"
+		format gui slot 11 with apple named "&fHealth: &a%{_health}%"
+		format gui slot 30 with writable book named "&b&lEdit" with lore "&7Coming soon."
+		format gui slot 31 with red stained glass pane named "&c&lBack":
 			showMobs({_p}, (metadata tag "pageBeforeExiting" of {_p}))
+		format gui slot 32 with barrier named "&c&lDelete" with lore "&cThis cannot be undone.":
+			deleteMob({_p}, {_m})
+		loop ("helmet", "chestplate", "leggings", "boots", "weapon"):
+			format next gui slot with {_e.%loop-value%}
 	open last gui to {_p}
 
 on tab complete of "/mob":
@@ -403,7 +428,7 @@ on tab complete of "/mob":
 	if tab arg-1 is "create":
 		set tab completions for position 2 to getMobTypes()
 	else if tab arg-1 is "spawn":
-		set tab completions for position 2 to getCreatedMobs()
+		set tab completions for position 2 to getCreatedMobNames()
 
 command /mob <text> [<text>]:
 	usage: &c/mob (create/spawn) (entitytype/name)
@@ -427,11 +452,11 @@ command /mob <text> [<text>]:
 			else:
 				send "&cUnable to create a mob while still setting the name/health."
 		else if arg-1 is "spawn":
-			if getCreatedMobs() contains arg-2:
+			if getCreatedMobNames() contains arg-2:
 				spawnMob(player, getCreatedMob(arg-2))
 			else:
 				send "&c%arg-2% doesn't seem to be a created mob. Registered mobs are listed as command completions."
 		else if arg-1 is "show" or "view":
 			showMobs(player)
 		else:
-			send "&c%arg-1% is not a valid argument. Try &bcreate &cor &bspawn&c."
+			send "&c%arg-1% is not a valid argument. Try &bcreate, &bspawn &c and &bshow&c."
