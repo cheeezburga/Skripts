@@ -3,7 +3,12 @@
 # maybe allow for mobs to have the same name
 # add viewing all the registered mobs and deleting specific mobs
 # add timestamp for when mob was registered, might be useful stat to have
-# every time a mob is spawned, add 1 to a tag which holds the number of times its been spawned
+# get new way to add to timesSpawned tag (i.e. not having to loop entire nbt file)
+# 		maybe filter the compound list tag where string tag name of input is name
+#		ask around if cant figure out
+# the show mobs gui will put user back to page 2 even if it doesnt exist
+#		add a check to see if the second page should even exist any more
+# 
 
 function getMobTypes() :: entity types:
 	set {_t::*} to ("zombie", "zombie villager", "husk", "skeleton", "stray", "wither skeleton", "piglin")
@@ -247,6 +252,8 @@ function submitMob(p: player):
 		set {_mobNbt} to empty nbt compound
 		set {_name} to (metadata tag "guiName" of {_p})
 		set (uuid tag "uuid" of {_mobNbt}) to random uuid
+		set (double tag "timeCreated" of {_mobNbt}) to unix timestamp of now
+		set (int tag "timesSpawned" of {_mobNbt}) to 0
 		set (string tag "name" of {_mobNbt}) to {_name}
 		set (int tag "health" of {_mobNbt}) to (metadata tag "guiHealth" of {_p}) if (metadata tag "guiHealth" of {_p} is set) else 20
 		set (string tag "type" of {_mobNbt}) to (metadata tag "guiType" of {_p})
@@ -332,9 +339,17 @@ function openGui(p: player):
 			submitMob({_p})
 	open last gui to {_p}
 
+function addToTimesSpawned(p: player, m: text, i: int):
+	set {_mobNbt} to getCreatedMob({_m})
+	set {_mobs} to nbt from file "plugins/Skript/mobCreator/mobs.dat"
+	set {_mobs::*} to (compound list tag "mobs" of {_mobs})
+	loop {_mobs::*}:
+		if (string tag "name" of loop-value) is {_m}:
+			add {_i} to (int tag "timesSpawned" of loop-value)
+	save nbt file of {_mobs}
+
 function spawnMob(p: player, n: nbt compound):
-	set {_type} to (string tag "type" of {_n})
-	set {_type} to ({_type} parsed as entity type)
+	set {_type} to (string tag "type" of {_n}) parsed as entity type
 	set {_name} to (string tag "name" of {_n})
 	set {_health} to (int tag "health" of {_n})
 	set {_helmet} to (compound tag "equip;helmet" of {_n})
@@ -350,6 +365,7 @@ function spawnMob(p: player, n: nbt compound):
 		equip event-entity with (item from nbt {_leggings})
 		equip event-entity with (item from nbt {_boots})
 		set tool of event-entity to (item from nbt {_weapon})
+	addToTimesSpawned({_p}, {_name}, 1)
 	send "&aSpawned %formatted {_name}% &aat your location." to {_p}
 
 function showMobs(p: player, page: int = 1):
@@ -394,7 +410,10 @@ function deleteMob(p: player, m: nbt compound):
 	set compound list tag "mobs" of {_n} to {_mobs::*}
 	save nbt file of {_n}
 	if size of {_mobs::*} >= 1:
-		showMobs({_p}, metadata tag "pageBeforeExiting" of {_p})
+		set {_page} to (metadata tag "pageBeforeExiting" of {_p})
+		if ceil((size of {_mobs::*})/28) < {_page}:
+			set {_page} to ({_page} - 1)
+		showMobs({_p}, ("%{_page}%" parsed as int))
 	else:
 		send "&cTried to reopen the registered mobs GUI, but none were registered." to {_p}
 
@@ -406,14 +425,13 @@ function showMob(p: player, m: nbt compound):
 	set {_name} to (string tag "name" of {_m})
 	set {_type} to (string tag "type" of {_m})
 	set {_health} to (int tag "health" of {_m})
+	set {_timesSpawned} to (int tag "timesSpawned" of {_m})
 	loop ("helmet", "chestplate", "leggings", "boots", "weapon"):
 		set {_e.%loop-value%} to (compound tag "equip;%loop-value%" of {_m}) if ({_m} has tag "equip;%loop-value%") else empty nbt compound
 		set {_e.%loop-value%} to (nbt item from {_e.%loop-value%}) if ("%{_e.%loop-value%}%" is not "{}") else (gray dye)
 	create gui with virtual chest inventory named "Registered Mobs | %unformatted {_name}%" with 5 rows:
-		format gui slot ((integers from 0 to 8),12,(integers from 18 to 26),27,28,29,33,34,35 and (integers from 36 to 45)) with black stained glass pane named "&0"
-		format gui slot 9 with name tag named "&fName: %{_name}%"
-		format gui slot 10 with zombie spawn egg named "&fType: &a%{_type}%"
-		format gui slot 11 with apple named "&fHealth: &a%{_health}%"
+		format gui slot ((integers from 0 to 9),11,(integers from 17 to 26),27,28,29,33,34,35 and (integers from 36 to 45)) with black stained glass pane named "&0"
+		format gui slot 10 with zombie spawn egg named "&b&lMob Info" with lore "&fName: %{_name}%", "&fType: &7%{_type}%", "&fHealth: &7%{_health}%" and "&fTimes spawned: &7%{_timesSpawned}%"
 		format gui slot 30 with writable book named "&b&lEdit" with lore "&7Coming soon."
 		format gui slot 31 with red stained glass pane named "&c&lBack":
 			showMobs({_p}, (metadata tag "pageBeforeExiting" of {_p}))
@@ -459,4 +477,4 @@ command /mob <text> [<text>]:
 		else if arg-1 is "show" or "view":
 			showMobs(player)
 		else:
-			send "&c%arg-1% is not a valid argument. Try &bcreate, &bspawn &c and &bshow&c."
+			send "&c%arg-1% is not a valid argument. Try &bcreate, &bspawn &cand &bshow&c."
