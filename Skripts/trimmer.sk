@@ -1,0 +1,60 @@
+options:
+	pb: &7[&b&lTrimmer&7]
+
+function isTrimmable(i: item) :: boolean:
+	loop all armor and turtle helmet:
+		if type of {_i} is loop-value:
+			return true
+	return false
+
+function getPatternName(t: trim pattern) :: text:
+	set {_t} to "%{_t}%"
+	replace all "_" in {_t} with " "
+	return "&f%{_t} in proper case%"
+
+function getMaterialName(t: trim material) :: text:
+	set {_t} to "%{_t}%"
+	replace all "_material" in {_t} with ""
+	return "&f%{_t} in proper case%"
+
+function trimPatterns(p: player, i: item):
+	close {_p}'s inventory
+	set {_size} to ceil((size of available trim patterns)/7) + 2
+	create gui with virtual chest inventory named "Trimmer | Choose pattern" with {_size} rows:
+		format gui slot ((integers from 0 to 9),17,18,26,27 and (integers from 35 to 44)) with black stained glass pane named "&0"
+		format gui slot 40 with red stained glass pane named "&c&lExit":
+			close {_p}'s inventory
+		loop available trim patterns:
+			set {_t} to {_i}
+			set armor trim of {_t} to armor trim from lapis_material and loop-value
+			format next gui slot with {_t} named getPatternName(loop-value):
+				trimMaterials({_p}, {_t})
+		loop 6 times:
+			format next gui slot with gray stained glass pane named "&0"
+	open last gui to {_p}
+
+function trimMaterials(p: player, i: item):
+	close {_p}'s inventory
+	set {_size} to ceil((size of available trim materials)/7) + 2
+	create gui with virtual chest inventory named "Trimmer | Choose material" with {_size} rows:
+		format gui slot ((integers from 0 to 9),17,18 and (integers from 26 to 35)) with black stained glass pane named "&0"
+		format gui slot 31 with red stained glass pane named "&c&lBack":
+			trimPatterns({_p}, (metadata tag "trimTool" of {_p}))
+		loop available trim materials:
+			set {_t} to {_i}
+			set armor trim of {_t} to armor trim from loop-value and (trim pattern of armor trim of {_t})
+			format next gui slot with {_t} named getMaterialName(loop-value):
+				close {_p}'s inventory
+				clear (metadata tag "trimTool" of {_p})
+				set armor trim of {_p}'s tool to (armor trim of {_t})
+		loop 6 times:
+			format next gui slot with gray stained glass pane named "&0"
+	open last gui to {_p}
+
+command /trim:
+	trigger:
+		if isTrimmable(player's tool) is true:
+			set (metadata tag "trimTool" of player) to player's tool
+			trimPatterns(player, (player's tool))
+		else:
+			send "{@pb} &cYour held item is not trimmable."
