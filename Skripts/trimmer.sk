@@ -1,9 +1,34 @@
 options:
 	pb: &7[&b&lTrimmer&7]
+	permChangeUseResources: trimmer.changeOption
+
+on load:
+	set {trimmer::shouldUseResources} to false if ({trimmer::shouldUseResources} is not set)
 
 function isTrimmable(i: item) :: boolean:
 	loop all armor and turtle helmet:
 		if type of {_i} is loop-value:
+			return true
+	return false
+
+function getTemplateFromPattern(t: trim pattern) :: item:
+	set {_t} to "%{_t}%"
+	replace all "_pattern" in {_t} with ""
+	return ("%{_t}% armor trim smithing template" parsed as item)
+
+function getMaterialAsItem(t: trim material) :: item:
+	set {_t} to "%{_t}%"
+	replace all "_material" in {_t} with ""
+	set {_c} to " ingot" if ({_t} is ("iron", "copper", "gold" or "netherite"))
+	set {_c} to " dust" if ({_t} is "redstone")
+	set {_c} to " quartz" if ({_t} is "quartz")
+	set {_c} to " shard" if ({_t} is "amethyst")
+	set {_c} to "" if ({_t} is ("diamond", "emerald" or "lapis"))
+	return ("%{_t}%%{_c}%" parsed as item)
+
+function hasTrimItems(p: player, t: armor trim) :: boolean:
+	if {_p} has 1 of getTemplateFromPattern(trim pattern of {_t}):
+		if {_p} has 1 of getMaterialAsItem(trim material of {_t}):
 			return true
 	return false
 
@@ -16,6 +41,25 @@ function getMaterialName(t: trim material) :: text:
 	set {_t} to "%{_t}%"
 	replace all "_material" in {_t} with ""
 	return "&f%{_t} in proper case%"
+
+function trimAlreadyApplied(p: player, t: armor trim) :: boolean:
+	if (armor trim of {_p}'s tool) is {_t}:
+		return true
+	return false
+
+function trim(p: player, t: armor trim):
+	if {trimmer::shouldUseResources} is false:
+		set armor trim of {_p}'s tool to {_t}
+	else:
+		if trimAlreadyApplied({_p}, {_t}) is false:
+			if hasTrimItems({_p}, {_t}) is true:
+				set armor trim of {_p}'s tool to {_t}
+				remove 1 of getTemplateFromPattern(trim pattern of {_t}) from {_p}
+				remove 1 of getMaterialAsItem(trim material of {_t}) from {_p}
+			else:
+				send "{@pb} &cCannot apply that armor trim to your held item as you don't have the required resources." to {_p}
+		else:
+			send "{@pb} &cYour held item already has that armor trim applied." to {_p}
 
 function trimPatterns(p: player, i: item):
 	close {_p}'s inventory
@@ -46,15 +90,27 @@ function trimMaterials(p: player, i: item):
 			format next gui slot with {_t} named getMaterialName(loop-value):
 				close {_p}'s inventory
 				clear (metadata tag "trimTool" of {_p})
-				set armor trim of {_p}'s tool to (armor trim of {_t})
+				trim({_p}, (armor trim of {_t}))
 		loop 6 times:
 			format next gui slot with gray stained glass pane named "&0"
 	open last gui to {_p}
 
-command /trim:
+on tab complete of "/trim":
+	if player has permission "{@permChangeUseResources}":
+		set tab completions for position 1 to "shouldUseResources"
+
+command /trim [<text>]:
 	trigger:
-		if isTrimmable(player's tool) is true:
-			set (metadata tag "trimTool" of player) to player's tool
-			trimPatterns(player, (player's tool))
+		if arg-1 is not set:
+			if isTrimmable(player's tool) is true:
+				set (metadata tag "trimTool" of player) to player's tool
+				trimPatterns(player, (player's tool))
+			else:
+				send "{@pb} &cYour held item is not trimmable."
 		else:
-			send "{@pb} &cYour held item is not trimmable."
+			if arg-1 is "shouldUseResources":
+				if player has permission "{@permChangeUseResources}":
+					set {trimmer::shouldUseResources} to true if ({trimmer::shouldUseResources} is false) else false
+					send "{@pb} &aShould use resources: &b%{trimmer::shouldUseResources}%"
+				else:
+					send "{@pb} &cYou don't have permission to do this."
