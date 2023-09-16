@@ -1,0 +1,179 @@
+options:
+    prefix: [Text Displays]
+
+on skript stop:
+    send "{@prefix} Saving text display data for retrieval on start" to console
+    set {_backup} to nbt from file "plugins/Skript/TextDisplays/start.dat"
+    set {_ids::*} to indexes of {displays::supers::*}
+    loop {_ids::*}:
+        loop indexes of {displays::supers::%loop-value%::lines::*}:
+            set uuid tag "supers;%loop-value-1%;%loop-value-2%" of {_backup} to ({displays::supers::%loop-value-1%::lines::%loop-value-2%::entity} parsed as entity)
+        loop indexes of {displays::subs::%loop-value%::lines::*}:
+            set {_i} to 1
+            loop {displays::subs::%loop-value-1%::lines::%loop-value-2%::*}:
+                set uuid tag "subs;%loop-value-1%;%loop-value-2%;%{_i}%" of {_backup} to (loop-value-3 parsed as entity)
+                add 1 to {_i}
+    save nbt file of {_backup}
+    send "{@prefix} Saved text display data" to console
+
+on skript start:
+    send "{@prefix} Loading text display data to variables..." to console
+    set {_backup} to nbt from file "plugins/Skript/TextDisplays/start.dat"
+    loop nbt tags of {_backup}:
+        if loop-value is "supers":
+            set {_ids} to tag loop-value of {_backup}
+            loop nbt tags of {_ids}:
+                set {_lines} to tag loop-value-2 of {_ids}
+                loop nbt tags of {_lines}:
+                    set {_e} to uuid tag loop-value-3 of {_lines}
+                    set {displays::supers::%loop-value-2%::lines::%loop-value-3%::entity} to {_e}
+        if loop-value is "subs":
+            clear {displays::subs::*}
+            set {_ids} to tag loop-value of {_backup}
+            loop nbt tags of {_ids}:
+                set {_lines} to tag loop-value-2 of {_ids}
+                loop nbt tags of {_lines}:
+                    set {_copies} to tag loop-value-3 of {_lines}
+                    loop nbt tags of {_copies}:
+                        set {_e} to uuid tag loop-value-4 of {_copies}
+                        add {_e} to {displays::subs::%loop-value-2%::lines::%loop-value-3%::*}
+    
+
+function doesDisplayExist(id: text) :: boolean:
+    if indexes of {displays::supers::*} contains {_id}:
+        return true
+    return false
+
+function getSuper(id: text, line: int) :: entity:
+    return ({displays::supers::%{_id}%::lines::%{_line}%::entity} parsed as entity)
+
+function getComponentFromText(text: strings) :: text component:
+    if "%{_text::*}%" contains "&":
+        return (text component of "%{_text::*}%")
+    else:
+        return (mini message from "%{_text::*}%")
+
+function createSuper(p: player, id: text, line: int, text: strings):
+    set {_loc} to {_p}'s eyes if (doesDisplayExist({_id}) is false) else (location of ({displays::supers::%{_id}%::lines::1::entity} parsed as entity))
+    set {_lines::*} to "%{_text::*}%" split at "||"
+    loop indexes of {_lines::*}:
+        set {_l} to loop-value parsed as integer
+        skbee spawn text display at ({_loc} ~ vector(0,-0.3*({_line}+{_l}-1),0)++vector(0,0.3,0))
+        set {_d} to last spawned entity
+        set display billboard of {_d} to center
+        set display component of {_d} to getComponentFromText({_lines::%loop-value%})
+        set string tag "custom;id" of nbt of {_d} to {_id}
+        set byte tag "custom;super" of nbt of {_d} to 1
+        set int tag "custom;line" of nbt of {_d} to {_line}+{_l}-1
+        set {displays::supers::%{_id}%::lines::%{_line}+{_l}-1%::text} to "%{_line::%loop-value%}%"
+        set {displays::supers::%{_id}%::lines::%{_line}+{_l}-1%::entity} to uuid of {_d}
+    set {_locs::*} to killSubs({_id})
+    loop {_locs::*}:
+        createSub(loop-value, {_id})
+
+function createSub(l: location, id: text):
+    loop indexes of {displays::supers::%{_id}%::lines::*} in ascending order:
+        set {_super} to getSuper({_id}, (loop-value parsed as integer))
+        skbee spawn text display at ({_l} ~ vector(0,(-0.3*(loop-value parsed as integer)),0)++vector(0,0.3,0))
+        set {_d} to last spawned entity
+        set display billboard of {_d} to center
+        set display component of {_d} to display component of {_super}
+        set string tag "custom;id" of nbt of {_d} to {_id}
+        set byte tag "custom;sub" of nbt of {_d} to 1
+        set int tag "custom;line" of nbt of {_d} to (loop-value parsed as integer)
+        set uuid tag "custom;super" of nbt of {_d} to getSuper({_id}, (loop-value parsed as integer))
+        add uuid of {_d} to {displays::subs::%{_id}%::lines::%loop-value%::*}
+
+function createDisplay(p: player, id: text, text: strings):
+    if doesDisplayExist({_id}) is true:
+        createSub({_p}'s eyes, {_id})
+        send "&aCreated copy of text display with id &b%{_id}%&a." to {_p}
+    else:
+        createSuper({_p}, {_id}, 1, {_text::*})
+        send "&aCreated text display with id &b%{_id}%&a." to {_p}
+
+function setLine(p: player, id: text, text: strings):
+    set {_line::*} to "%{_text::*}%" parsed as "%integer% %text%"
+    if indexes of {displays::supers::%{_id}%::lines::*} contains "%{_line::1}%":
+        set {displays::supers::%{_id}%::lines::%{_line::1}%::text} to {_line::2}
+        set display component of getSuper({_id}, {_line::1}) to getComponentFromText({_line::2})
+    set {_locs::*} to killSubs({_id})
+    loop {_locs::*}:
+        createSub(loop-value, {_id})
+
+function killSubs(id: text) :: locations:
+    loop indexes of {displays::subs::%{_id}%::lines::*}:
+        loop {displays::subs::%{_id}%::lines::%loop-value%::*}:
+            add (location of (loop-value-2 parsed as entity)) to {_locs::*} if (loop-value-1 is "1")
+            kill (loop-value-2 parsed as entity)
+    clear {displays::subs::%{_id}%::*}
+    delete {displays::subs::%{_id}%}
+    return {_locs::*}
+
+function removeDisplay(id: text):
+    killSubs({_id})
+    loop indexes of {displays::supers::%{_id}%::lines::*}:
+        kill ({displays::supers::%{_id}%::lines::%loop-value%::entity} parsed as entity)
+    clear {displays::supers::%{_id}%::*}
+    delete {displays::supers::%{_id}%}
+
+function listDisplays(p: player):
+    send "" to {_p}
+    send "&aRegistered text displays (%size of indexes of {displays::supers::*}%):" to {_p}
+    loop indexes of {displays::supers::*}:
+        set {_c} to text component from " &7- &b%loop-value%"
+        loop indexes of {displays::supers::%loop-value%::lines::*}:
+            add {displays::supers::%loop-value-1%::lines::%loop-value-2%::text} to {_t::*}
+        set hover event of {_c} to hover event showing "Coming soon..."
+        send component {_c} to {_p}
+    send "" to {_p}
+
+on entity remove from world:
+    if nbt of event-entity has tag "custom;super":
+        if nbt of event-entity does not have tag "custom;sub":
+            set {_id} to string tag "custom;id" of nbt of event-entity
+            killSubs({_id})
+
+on tab complete of "/textdisplay":
+    set tab completions for position 1 to ("create", "remove", "addline", "setline", "list")
+    if tab arg-1 is "create":
+        set tab completions for position 2 to "<id>"
+        set tab completions for position 3 to "[<text>]"
+    else if tab arg-1 is "remove", "addline" or "setline":
+        set tab completions for position 2 to indexes of {displays::supers::*}
+        if tab arg-1 is "setline":
+            set tab completions for position 3 to indexes of {displays::supers::%tab arg-2%::lines::*}
+            set tab completions for position 4 to "[<text>]"
+        else:
+            set tab completions for position 3 to "[<text>]"
+
+command /textdisplay [<text>] [<text>] [<strings>]:
+    aliases: /textdisplays
+    trigger:
+        if arg-1 is not set:
+            send "&aSimple Text Displays by cheezburga"
+        else:
+            if arg-1 is "create" or "make":
+                if arg-2 is set:
+                    createDisplay(player, (unformatted arg-2), (arg-3))
+                else:
+                    send "&cProvide an ID for the display to be created."
+            else if arg-1 is "remove" or "delete":
+                if arg-2 is set:
+                    removeDisplay((unformatted arg-2))
+                else:
+                    send "&cProvide an ID for the display to be removed."
+            else if arg-1 is "addline":
+                if arg-2 is set:
+                    createSuper(player, (unformatted arg-2), (size of indexes of {displays::supers::%unformatted arg-2%::lines::*}) + 1, (arg-3))
+                else:
+                    send "&cProvide an ID for the display to have a line added."
+            else if arg-1 is "setline":
+                if arg-2 is set:
+                    setLine(player, (unformatted arg-2), (arg-3))
+                else:
+                    send "&cProvide an ID for the display to have a line set."
+            else if arg-1 is "list":
+                listDisplays(player)
+            else:
+                send "&c%arg-1% is not a valid argument."
