@@ -89,15 +89,15 @@ function removeDisplay(p: player, id: text):
 function listDisplays(p: player):
     if size of indexes of {displays::supers::*} >= 1:
         send "" to {_p}
-        set {_c} to text component of "&aRegistered text displays (%size of indexes of {displays::supers::*}%):"
-        set hover event of {_c} to hover event showing "&7Note that the '&' symbol will not be shown in the hover."
-        send component {_c} to {_p}
+        send component (text component of "&aRegistered text displays (%size of indexes of {displays::supers::*}%):") to {_p}
         loop indexes of {displays::supers::*}:
             set {_c} to text component from " &7- &b%loop-value% (%size of {displays::subs::%loop-value%::lines::1::*}%)"
             clear {_t::*}
+            add "&bClick to autofill remove command.", "Lines:" to {_t::*}
             loop indexes of {displays::supers::%loop-value%::lines::*}:
-                add uncolored {displays::supers::%loop-value-1%::lines::%loop-value-2%::text} to {_t::*}
-            set hover event of {_c} to hover event showing (join {_t::*} using "||") split at "||"
+                add (merge components (text component from "&7%loop-value-2%. ") and getComponentFromText({displays::supers::%loop-value-1%::lines::%loop-value-2%::text})) to {_t::*}
+            set hover event of {_c} to hover event showing {_t::*}
+            set click event of {_c} to click event to suggest command "/textdisplay remove %loop-value%"
             send component {_c} to {_p}
         send "" to {_p}
     else:
