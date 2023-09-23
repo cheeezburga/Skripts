@@ -1,0 +1,201 @@
+import:
+	org.bukkit.Bukkit
+	org.bukkit.inventory.ItemStack
+
+on load:
+	set {offsets::1} to vector(0.188,0,0.188)
+	set {offsets::2} to vector(0,0,0.188)
+	set {offsets::3} to vector(-0.188,0,0.188)
+	set {offsets::4} to vector(0.188,0,0)
+	set {offsets::5} to vector(0,0,0)
+	set {offsets::6} to vector(-0.188,0,0)
+	set {offsets::7} to vector(0.188,0,-0.188)
+	set {offsets::8} to vector(0,0,-0.188)
+	set {offsets::9} to vector(-0.188,0,-0.188)
+
+function getResultFromItems(i: items) :: item:
+	loop {_i::*}:
+		add (loop-value).getRandom() to {_n::*}
+	set {_recipe} to Bukkit.getCraftingRecipe([{_n::*} as ItemStack], world "world")
+	if {_recipe} is set:
+		set {_result} to {_recipe}.getResult()
+		return {_result}
+	return air
+
+function getCraftingRotation(i: items) :: items:
+	set {_rotated::*} to (({_i::7}), ({_i::4}), ({_i::1}), ({_i::8}), ({_i::5}), ({_i::2}), ({_i::9}), ({_i::6}), ({_i::3}))
+	return {_rotated::*}
+
+function toggleBetterCrafting(b: block):
+	if (byte tag "custom;betterCrafting" of nbt of {_b}) is 1:
+		createCraftingInteractions({_b})
+	else:
+		killInteractions({_b})
+
+function createCraftingInteraction(b: block, l: location, mod: int) :: entity:
+	skbee spawn interaction at {_l}
+	set {_d} to last spawned entity
+	set interaction width of {_d} to 0.125
+	set interaction height of {_d} to 0.125/2
+	set (byte tag "custom;craftInteraction" of nbt of {_d}) to 1
+	set (int tag "custom;slot" of nbt of {_d}) to {_mod}
+	set (double list tag "custom;block" of nbt of {_d}) to ((x-coord of {_b}), (y-coord of {_b}), (z-coord of {_b}))
+	return {_d}
+
+function createCraftingGlass(l: location, mod: int) :: entity:
+	skbee spawn item display at {_l}
+	set {_d} to last spawned entity
+	set display scale of {_d} to vector(0.125,0.125,0.125)
+	set display item of {_d} to glass
+	set (byte tag "custom;craftGlass" of nbt of {_d}) to 1
+	set (int tag "custom;slot" of nbt of {_d}) to {_mod}
+	return {_d}
+
+function createCraftingItem(l: location, mod: int) :: entity:
+	skbee spawn item display at {_l}
+	set {_d} to last spawned entity
+	set display scale of {_d} to vector(0.12,0.12,0.12)
+	set display item of {_d} to air
+	add (nbt from "{Rotation:[0f,90f]}") to (nbt of {_d})
+	set (byte tag "custom;craftItem" of nbt of {_d}) to 1
+	set (int tag "custom;slot" of nbt of {_d}) to {_slot}
+	return {_d}
+
+function doRotation(result: entity):
+	while {_result} is alive:
+		if display item of {_result} is not air:
+			set {_r::*} to tag "Rotation" of nbt of {_result}
+			add (nbt from "{Rotation:[%{_r::1} + 5%f,0f]}") to nbt of {_result}
+		wait 1 tick
+
+function createCraftingResult(b: block) :: entity:
+	skbee spawn item display at {_b} ~ vector(0,1.5,0)
+	set {_d} to last spawned entity
+	set display scale of {_d} to vector(0.75,0.75,0.75)
+	set display item of {_d} to air
+	set (byte tag "custom;craftingResult" of nbt of {_d}) to 1
+	set (uuid tag "custom;result" of nbt of {_b}) to {_d}
+	doRotation({_d})
+	return {_d}
+
+function createResultInteraction(b: block, result: entity):
+	skbee spawn interaction at {_b} ~ vector(0,1.1,0)
+	set {_d} to last spawned entity
+	set interaction width of {_d} to 0.75
+	set interaction height of {_d} to 0.75
+	set (byte tag "custom;resultInteraction" of nbt of {_d}) to 1
+	set (double list tag "custom;block" of nbt of {_d}) to ((x-coord of {_b}), (y-coord of {_b}), (z-coord of {_b}))
+	set (uuid tag "custom;result" of nbt of {_d}) to {_result}
+	set (uuid tag "custom;interaction" of nbt of {_result}) to {_d}
+
+function linkInteractions(interaction: entity, display: entity, item: entity):
+	set (uuid tag "custom;interaction" of nbt of {_display}) to {_interaction}
+	set (uuid tag "custom;interaction" of nbt of {_item}) to {_interaction}
+	set (uuid tag "custom;display" of nbt of {_interaction}) to {_display}
+	set (uuid tag "custom;item" of nbt of {_interaction}) to {_item}
+
+function createCraftingInteractions(b: block):
+	set {_l} to (exact location of {_b}) ~ vector(0.5,1,0.5)
+	loop 3 times:
+		loop 3 times:
+			set {_mod} to (3*(loop-value-1 - 1)) + loop-value-2
+			set {_interaction} to createCraftingInteraction({_b}, ({_l} ~ {offsets::%{_mod}%}), {_mod})
+			set {_display} to createCraftingGlass(location of {_interaction}, {_mod})
+			set {_item} to createCraftingItem(location of {_interaction}, {_mod})
+			set (uuid tag "custom;interactions;%{_mod}%" of nbt of {_b}) to {_interaction}
+			set (uuid tag "custom;displays;%{_mod}%" of nbt of {_b}) to {_display}
+			set (uuid tag "custom;items;%{_mod}%" of nbt of {_b}) to {_item}
+			linkInteractions({_interaction}, {_display}, {_item})
+	set {_result} to createCraftingResult({_b})
+	createResultInteraction({_b}, {_result})
+
+function killInteractions(b: block):
+	loop 9 times:
+		set {_interaction} to (uuid tag "custom;interactions;%loop-value%" of nbt of {_b})
+		kill ({_interaction} parsed as entity)
+		set {_display} to (uuid tag "custom;displays;%loop-value%" of nbt of {_b})
+		kill ({_display} parsed as entity)
+		set {_item} to (uuid tag "custom;items;%loop-value%" of nbt of {_b}) parsed as entity
+		if display item of {_item} is not air:
+			drop (display item of {_item}) at {_item} ~ vector(0,0.5,0)
+		kill {_item}
+	set {_result} to (uuid tag "custom;result" of nbt of {_b}) parsed as entity
+	set {_resultInteraction} to (uuid tag "custom;interaction" of nbt of {_result})
+	kill {_result}
+	kill ({_resultInteraction} parsed as entity)
+	delete (uuid tag "custom;interactions" of nbt of {_b})
+	delete (uuid tag "custom;displays" of nbt of {_b})
+	delete (uuid tag "custom;items" of nbt of {_b})
+	delete (uuid tag "custom;result" of nbt of {_b})
+
+function checkForResult(b: block) :: item:
+	loop 9 times:
+		set {_interaction} to (uuid tag "custom;interactions;%loop-value%" of nbt of {_b}) parsed as entity
+		set {_item} to (uuid tag "custom;item" of nbt of {_interaction}) parsed as entity
+		set {_items::%loop-value%} to display item of {_item} if (display item of {_item} is not air) else air
+	set {_result} to getResultFromItems({_items::*})
+	return {_result} if {_result} is not air
+	loop 3 times:
+		set {_rotation::*} to getCraftingRotation({_items::*})
+		set {_items::*} to {_rotation::*}
+		set {_result} to getResultFromItems({_rotation::*})
+		exit loop if {_result} is not air
+	return {_result}
+
+function updateCraftingItem(p: player, item: entity):
+	if (display item of {_item}) is air:
+		set {_i} to 1 of {_p}'s tool
+		remove {_i} from {_p}
+		set (display item of {_item}) to {_i}
+		play sound "block.wood.place" at volume 2 with pitch 1 for {_p}
+	else:
+		give (display item of {_item}) to {_p}
+		set (display item of {_item}) to air
+		play sound "entity.item.pickup" at volume 2 with pitch 1 for {_p}
+
+function updateResult(b: block):
+	set {_result} to (uuid tag "custom;result" of nbt of {_b}) parsed as entity
+	set {_item} to checkForResult({_b})
+	set (display item of {_result}) to {_item}
+
+function clearCraftItems(b: block):
+	loop 9 times:
+		set {_interaction} to (uuid tag "custom;interactions;%loop-value%" of nbt of {_b}) parsed as entity
+		set {_item} to (uuid tag "custom;item" of nbt of {_interaction}) parsed as entity
+		set (display item of {_item}) to air
+	updateResult({_b})
+
+function takeResult(p: player, d: entity):
+	set {_result} to (uuid tag "custom;result" of nbt of {_d}) parsed as entity
+	set {_item} to (display item of {_result})
+	set (display item of {_result}) to air
+	give {_item} to {_p}
+	play sound "entity.item.pickup" at volume 2 with pitch 1 for {_p}
+	set {_block::*} to (double list tag "custom;block" of nbt of {_d})
+	clearCraftItems(block at location({_block::1}, {_block::2}, {_block::3}))
+
+on break of crafting table:
+	if nbt of event-block has tag "custom;betterCrafting":
+		cancel event
+		set byte tag "custom;betterCrafting" of nbt of event-block to 0
+		toggleBetterCrafting(event-block)
+		break event-block naturally
+
+on right click on entity:
+	if nbt of event-entity has tag "custom;craftInteraction":
+		set {_item} to (uuid tag "custom;item" of nbt of event-entity)
+		updateCraftingItem(player, ({_item} parsed as entity))
+		set {_block::*} to (double list tag "custom;block" of nbt of event-entity)
+		set {_block} to block at location({_block::1}, {_block::2}, {_block::3})
+		updateResult({_block})
+	else if nbt of event-entity has tag "custom;resultInteraction":
+		takeResult(player, event-entity)
+
+on left click on crafting table:
+	set byte tag "custom;betterCrafting" of nbt of event-block to 1 if (byte tag "custom;betterCrafting" of nbt of event-block is not 1) else 0
+	toggleBetterCrafting(event-block)
+
+command /crafting:
+	aliases: /bettercrafting
+	trigger:
+		send "&aBetter Crafting by cheezburga"
