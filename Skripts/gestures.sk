@@ -1,0 +1,108 @@
+options:
+	pb: &7[&b&lGestures&7]
+
+import:
+	java.io.File
+	java.io.FileWriter
+	java.io.BufferedWriter
+
+on load:
+	set {_file} to new File("plugins/Skript/scripts/gestures")
+	if {_file}.exists() is false:
+		{_file}.mkdirs()
+
+function getRegisteredGestures() :: strings:
+	return ...(new File("plugins/Skript/scripts/gestures")).list()
+
+function registerGesture(g: string):
+	set {_pattern} to {_g}
+	replace all " " in {_g} with "-"
+	set {_file} to new File("plugins/Skript/scripts/gestures/%{_g}%.sk")
+	if {_file}.exists() is false:
+		{_file}.createNewFile()
+	set {_writer} to new FileWriter({_file}, true)
+	set {_bufferedWriter} to new BufferedWriter({_writer})
+	{_bufferedWriter}.write("event ""%{_g}%"":")
+	{_bufferedWriter}.newLine()
+	{_bufferedWriter}.write("	pattern: %{_pattern}%")
+	{_bufferedWriter}.newLine()
+	{_bufferedWriter}.write("	event-values: player")
+	{_bufferedWriter}.newLine()
+	{_bufferedWriter}.newLine()
+	{_bufferedWriter}.write("on %{_pattern}%:")
+	{_bufferedWriter}.newLine()
+	{_bufferedWriter}.write("	## available event-values are `player`")
+	{_bufferedWriter}.newLine()
+	{_bufferedWriter}.write("	## your code here")
+	{_bufferedWriter}.newLine()
+	{_bufferedWriter}.flush()
+	{_bufferedWriter}.close()
+	reload script "\gestures\%{_g}%.sk"
+
+on sneak toggle:
+	if player is not sneaking:
+		if player's tool is air:
+			if {gestures::%player%} is true:
+				set {_center} to (location 3 in front of player's eyes) ~ vector(0,-0.35,0)
+				set {_left} to location 2 left {_center}
+				set {_right} to location 2 right {_center}
+				set {_down} to location 2 below {_center}
+				set {_up} to location 2 above {_center}
+				wait 1 tick
+				while player is sneaking:
+					draw 1 electric_spark at ({_center}, {_left}, {_right}, {_up} and {_down}) with offset vector(0, 0, 0) with extra 0 to player
+					set {_pos} to location 3 in front of player's eyes
+					#send action bar "Left: %distance between {_pos} and {_left}% Right: %distance between {_pos} and {_right}% Up: %distance between {_pos} and {_up}% Dovn: %distance between {_pos} and {_down}%" to player
+					set {_select} to "Left" if (distance between {_pos} and {_left} is smaller than 1.4)
+					set {_select} to "Right" if (distance between {_pos} and {_right} is smaller than 1.4)
+					set {_select} to "Up" if (distance between {_pos} and {_up} is smaller than 1.5)
+					set {_select} to "Down" if (distance between {_pos} and {_down} is smaller than 1.1)
+					if {_select} is not {_selection}:
+						add {_select} to {_str::*}
+						set {_selection} to {_select}
+					wait 1 tick
+					if size of {_str::*} > 0:
+						send title "" with subtitle (join {_str::*} with " &7> &r") to player for (0.5 seconds) with fadein (0 seconds) and fade out (0.3 seconds)
+				set {_event} to (join {_str::*} with "-") in lower case
+				if getRegisteredGestures() contains "%{_event}%.sk":
+					set {_values::player} to player
+					call new custom event {_event} with values {_values::*}
+
+function listGestures(p: player):
+	set {_g::*} to getRegisteredGestures()
+	send "" to {_p}
+	send "{@pb} &aRegistered gestures:" to {_p}
+	loop {_g::*}:
+		clear {_l::*}
+		set {_l} to loop-value
+		replace all ".sk" in {_l} with ""
+		set {_l::*} to {_l} split at "-"
+		send "&7 - &a%join {_l::*} using " "%" to {_p}
+
+command /gestures [<text>] [<text>]:
+	trigger:
+		if arg-1 is not set:
+			send "{@pb} &aGesture system by cheezburga, with concept from danny19990"
+		else:
+			if arg-1 is "toggle":
+				set {gestures::%player%} to true if ({gestures::%player%} is not true) else false
+				send "{@pb} &aCurrently registering gestures on sneak: %{gestures::%player%}%"
+			else if arg-1 is "add":
+				if getRegisteredGestures() doesn't contain arg-2:
+					registerGesture(arg-2)
+					send "{@pb} &aRegistered event for gesture &9%arg-2%&a."
+				else:
+					send "{@pb} &cThat's already a registered gesture."
+			else if arg-1 is "refresh":
+				set {_g} to arg-2
+				replace all " " in {_g} with "-"
+				if getRegisteredGestures() doesn't contain "%{_g}%.sk":
+					send "{@pb} &cThat's not a registered gesture."
+				else:
+					reload script "\gestures\%{_g}%.sk"
+					send "{@pb} &aRefreshed the event corresponding to the &9%arg-2% &agesture."
+			else if arg-1 is "list":
+				if size of getRegisteredGestures() >= 1:
+					listGestures(player)
+				else:
+					send "{@pb} &cCouldn't find any registered gestures."
