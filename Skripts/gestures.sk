@@ -14,6 +14,14 @@ on load:
 function getRegisteredGestures() :: strings:
 	return ...(new File("plugins/Skript/scripts/gestures")).list()
 
+function getPrettyGestures(g: strings) :: strings:
+    loop {_g::*}:
+        set {_g} to loop-value
+        replace all ".sk" in {_g} with ""
+        replace all "-" in {_g} with " "
+        add {_g} to {_new::*}
+    return {_new::*}
+
 function registerGesture(g: string):
 	set {_pattern} to {_g}
 	replace all " " in {_g} with "-"
@@ -78,6 +86,13 @@ function listGestures(p: player):
 		replace all ".sk" in {_l} with ""
 		set {_l::*} to {_l} split at "-"
 		send "&7 - &a%join {_l::*} using " "%" to {_p}
+
+on tab complete of "/gestures":
+    set tab completions for position 1 to "toggle", "add", "refresh" and "list"
+    if tab arg-1 is "refresh":
+        set tab completions for position 2 to getPrettyGestures(getRegisteredGestures())
+    else if tab arg-1 is "add":
+        set tab completions for position 2 to "<gesture sequence>"
 
 command /gestures [<text>] [<text>]:
 	trigger:
