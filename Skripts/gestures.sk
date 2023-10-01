@@ -52,6 +52,12 @@ function registerGesture(g: string):
 	{_bufferedWriter}.close()
 	reload script "\gestures\%{_g}%.sk"
 
+function removeGesture(g: string):
+    replace all " " in {_g} with "-"
+    set {_file} to new File("plugins/Skript/scripts/gestures/%{_g}%.sk")
+    if {_file}.exists() is true:
+        {_file}.delete()
+
 on sneak toggle:
 	if player is not sneaking:
 		if player's tool is air:
@@ -132,8 +138,20 @@ command /gestures [<text>] [<text>]:
                     else:
                         send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
                 else:
-                    send "{@pb} &cMust provide a gesture sequence when trying to register a gesture."
-			else if arg-1 is "list":
+                    send "{@pb} &cMust provide a gesture sequence when trying to refresh a gesture."
+			else if arg-1 is "delete" or "remove":
+                if arg-2 is set:
+                    if arg-2 matches "^(?:(up|down|left|right) )*(up|down|left|right)?$":
+                        if getRegisteredGestures() doesn't contain arg-2:
+                            removeGesture(arg-2)
+                            send "{@pb} &aDeleted the gesture file for gesture &9%arg-2%&a."
+                        else:
+                            send "{@pb} &cCannot delete that gesture as it doesn't exist."
+                    else:
+                        send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
+                else:
+                    send "{@pb} &cMust provide a gesture sequence when trying to delete a gesture."
+            else if arg-1 is "list":
 				if size of getRegisteredGestures() >= 1:
 					listGestures(player)
 				else:
