@@ -7,9 +7,14 @@ import:
 	java.io.BufferedWriter
 
 on load:
+    # create the gestures direction in scripts folder if it doesnt exist
+    # will be unable to write new .sk files (register gestures) otherwise
 	set {_file} to new File("plugins/Skript/scripts/gestures")
 	if {_file}.exists() is false:
 		{_file}.mkdirs()
+
+on join:
+    set {gestures::%player%} to true if ({gestures::%player%} is not set)
 
 function getRegisteredGestures() :: strings:
 	return ...(new File("plugins/Skript/scripts/gestures")).list()
@@ -103,19 +108,31 @@ command /gestures [<text>] [<text>]:
 				set {gestures::%player%} to true if ({gestures::%player%} is not true) else false
 				send "{@pb} &aCurrently registering gestures on sneak: %{gestures::%player%}%"
 			else if arg-1 is "add":
-				if getRegisteredGestures() doesn't contain arg-2:
-					registerGesture(arg-2)
-					send "{@pb} &aRegistered event for gesture &9%arg-2%&a."
-				else:
-					send "{@pb} &cThat's already a registered gesture."
+                if arg-2 is set:
+                    if arg-2 matches "^(?:(up|down|left|right) )*(up|down|left|right)?$":
+        				if getRegisteredGestures() doesn't contain arg-2:
+        					registerGesture(arg-2)
+        					send "{@pb} &aRegistered event for gesture &9%arg-2%&a."
+        				else:
+        					send "{@pb} &cThat's already a registered gesture."
+                    else:
+                        send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
+                else:
+                    send "{@pb} &cMust provide a gesture sequence when trying to register a gesture."
 			else if arg-1 is "refresh":
-				set {_g} to arg-2
-				replace all " " in {_g} with "-"
-				if getRegisteredGestures() doesn't contain "%{_g}%.sk":
-					send "{@pb} &cThat's not a registered gesture."
-				else:
-					reload script "\gestures\%{_g}%.sk"
-					send "{@pb} &aRefreshed the event corresponding to the &9%arg-2% &agesture."
+                if arg-2 is set:
+                    if arg-2 matches "^(?:(up|down|left|right) )*(up|down|left|right)?$":
+        				set {_g} to arg-2
+        				replace all " " in {_g} with "-"
+        				if getRegisteredGestures() doesn't contain "%{_g}%.sk":
+        					send "{@pb} &cThat's not a registered gesture."
+        				else:
+        					reload script "\gestures\%{_g}%.sk"
+        					send "{@pb} &aRefreshed the event corresponding to the &9%arg-2% &agesture."
+                    else:
+                        send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
+                else:
+                    send "{@pb} &cMust provide a gesture sequence when trying to register a gesture."
 			else if arg-1 is "list":
 				if size of getRegisteredGestures() >= 1:
 					listGestures(player)
