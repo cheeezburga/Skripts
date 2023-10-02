@@ -1,158 +1,135 @@
 options:
 	pb: &7[&b&lGestures&7]
+	regex: (?:(up|down|left|right)\s+)+
 
 import:
-	java.io.File
-	java.io.FileWriter
-	java.io.BufferedWriter
+	ch.njol.skript.Skript
 
 on load:
-    # create the gestures direction in scripts folder if it doesnt exist
-    # will be unable to write new .sk files (register gestures) otherwise
-	set {_file} to new File("plugins/Skript/scripts/gestures")
-	if {_file}.exists() is false:
-		{_file}.mkdirs()
+	set {gestures::vectors::up} to vector(0,1.5,0)
+	set {gestures::vectors::down} to vector(0,-1.5,0)
+	set {gestures::vectors::left} to vector(1.5,0,0)
+	set {gestures::vectors::right} to vector(-1.5,0,0)
 
 on join:
-    set {gestures::%player%} to true if ({gestures::%player%} is not set)
+	set {gestures::players::%player%} to true if ({gestures::players::%player%} is not set)
 
-function getRegisteredGestures() :: strings:
-	return ...(new File("plugins/Skript/scripts/gestures")).list()
+function getSafeGesture(g: string) :: string:
+	return (join (...{_g}.split("\s+")) using " ")
 
-function getPrettyGestures(g: strings) :: strings:
-    loop {_g::*}:
-        set {_g} to loop-value
-        replace all ".sk" in {_g} with ""
-        replace all "-" in {_g} with " "
-        add {_g} to {_new::*}
-    return {_new::*}
+event "gesture":
+	pattern: gesture [[of] <(.+)>]
+	event-values: player
+	parse:
+		if regex-1 is set:
+			set {_gesture} to getSafeGesture("%regex-1%")
+			if {_gesture} matches "(?:(up|down|left|right)(?:\s+|$))+":
+				if {gestures::gestures::*} contains {_gesture}: #DOESNT WORK. SHOULD IT EVEN THROW AN ERROR IF THIS IS THE CASE?
+					continue
+				else:
+					Skript.error("This gesture is not registered. Use /gestures add <gesture sequence>.")
+			else:
+				Skript.error("Found invalid gesture event declaration. Must contain only up, down, left and right.")
+				stop
+		continue
+	check:
+		if {gestures::gestures::*} contains (data "gesture"):
+			continue if {_gesture} isn't set
+			continue if (data "gesture") is {_gesture}
+
+expression [event[-| ]]gesture:
+	usable in:
+		custom event "gesture"
+	get:
+		return event.getData("gesture")
 
 function registerGesture(g: string):
-	set {_pattern} to {_g}
-	replace all " " in {_g} with "-"
-	set {_file} to new File("plugins/Skript/scripts/gestures/%{_g}%.sk")
-	if {_file}.exists() is false:
-		{_file}.createNewFile()
-	set {_writer} to new FileWriter({_file}, true)
-	set {_bufferedWriter} to new BufferedWriter({_writer})
-	{_bufferedWriter}.write("event ""%{_g}%"":")
-	{_bufferedWriter}.newLine()
-	{_bufferedWriter}.write("	pattern: %{_pattern}%")
-	{_bufferedWriter}.newLine()
-	{_bufferedWriter}.write("	event-values: player")
-	{_bufferedWriter}.newLine()
-	{_bufferedWriter}.newLine()
-	{_bufferedWriter}.write("on %{_pattern}%:")
-	{_bufferedWriter}.newLine()
-	{_bufferedWriter}.write("	## available event-values are `player`")
-	{_bufferedWriter}.newLine()
-	{_bufferedWriter}.write("	## your code here")
-	{_bufferedWriter}.newLine()
-	{_bufferedWriter}.flush()
-	{_bufferedWriter}.close()
-	reload script "\gestures\%{_g}%.sk"
+	add {_g} to {gestures::gestures::*}
 
 function removeGesture(g: string):
-    replace all " " in {_g} with "-"
-    set {_file} to new File("plugins/Skript/scripts/gestures/%{_g}%.sk")
-    if {_file}.exists() is true:
-        {_file}.delete()
+	remove {_g} from {gestures::gestures::*}
 
 on sneak toggle:
 	if player is not sneaking:
 		if player's tool is air:
-			if {gestures::%player%} is true:
-				set {_center} to (location 3 in front of player's eyes) ~ vector(0,-0.35,0)
-				set {_left} to location 2 left {_center}
-				set {_right} to location 2 right {_center}
-				set {_down} to location 2 below {_center}
-				set {_up} to location 2 above {_center}
+			if {gestures::players::%player%} is true:
+				loop indexes of {gestures::vectors::*}:
+					set {_vectors::%loop-value%} to {gestures::vectors::%loop-value%}
+				rotate {_vectors::*} around x-axis by player's pitch
+				rotate {_vectors::*} around y-axis by (player's yaw * -1)
+				set {_center} to spherical vector radius 3, yaw (player's yaw), pitch (player's pitch)
+				loop indexes of {_vectors::*}:
+					set {__%loop-value%} to ((player's eyes ~ vector(0,-0.35,0)) ~ ({_center} ++ {_vectors::%loop-value%}))
+				set {__center} to ((player's eyes ~ vector(0,-0.35,0)) ~ {_center})
 				wait 1 tick
 				while player is sneaking:
-					draw 1 electric_spark at ({_center}, {_left}, {_right}, {_up} and {_down}) with offset vector(0, 0, 0) with extra 0 to player
-					set {_pos} to location 3 in front of player's eyes
-					#send action bar "Left: %distance between {_pos} and {_left}% Right: %distance between {_pos} and {_right}% Up: %distance between {_pos} and {_up}% Dovn: %distance between {_pos} and {_down}%" to player
-					set {_select} to "Left" if (distance between {_pos} and {_left} is smaller than 1.4)
-					set {_select} to "Right" if (distance between {_pos} and {_right} is smaller than 1.4)
-					set {_select} to "Up" if (distance between {_pos} and {_up} is smaller than 1.5)
-					set {_select} to "Down" if (distance between {_pos} and {_down} is smaller than 1.1)
-					if {_select} is not {_selection}:
-						add {_select} to {_str::*}
-						set {_selection} to {_select}
+					set {_current} to player's eyes ~ (spherical vector radius 3, yaw (player's yaw), pitch (player's pitch))
+					draw 1 electric_spark at ({__center}, {__up}, {__down}, {__left}, {__right}) with offset vector(0, 0, 0) with extra 0 to player
+					send action bar "Left: %distance between {_current} and {__left}% Right: %distance between {_current} and {__right}% Up: %distance between {_current} and {__up}% Down: %distance between {_current} and {__down}%" to player
+					set {_select} to "Left" if (distance between {_current} and {__left}) < 0.4
+					set {_select} to "Right" if (distance between {_current} and {__right}) < 0.4
+					set {_select} to "Up" if (distance between {_current} and {__up}) < 0.4
+					set {_select} to "Down" if (distance between {_current} and {__down}) < 0.4
+					if {_select} is not {_last}:
+						add {_select} to {_gestures::*}
+						set {_last} to {_select}
+					if size of {_gestures::*} > 0:
+						send title "" with subtitle (join {_gestures::*} with " &7> &r") to player for (0.5 seconds) with fadein (0 seconds) and fade out (0.3 seconds)
 					wait 1 tick
-					if size of {_str::*} > 0:
-						send title "" with subtitle (join {_str::*} with " &7> &r") to player for (0.5 seconds) with fadein (0 seconds) and fade out (0.3 seconds)
-				set {_event} to (join {_str::*} with "-") in lower case
-				if getRegisteredGestures() contains "%{_event}%.sk":
+				set {_event} to (join {_gestures::*} with " ") in lower case
+				if {gestures::gestures::*} contains {_event}:
 					set {_values::player} to player
-					call new custom event {_event} with values {_values::*}
+					set {_data::gesture} to (join {_gestures::*} with " ") in lower case
+					call new custom event "gesture" with {_values::*} and data {_data::*}
 
 function listGestures(p: player):
-	set {_g::*} to getRegisteredGestures()
 	send "" to {_p}
 	send "{@pb} &aRegistered gestures:" to {_p}
-	loop {_g::*}:
-		clear {_l::*}
-		set {_l} to loop-value
-		replace all ".sk" in {_l} with ""
-		set {_l::*} to {_l} split at "-"
-		send "&7 - &a%join {_l::*} using " "%" to {_p}
+	loop {gestures::gestures::*}:
+		send "&7 - &a%loop-value%" to {_p}
 
 on tab complete of "/gestures":
-    set tab completions for position 1 to "toggle", "add", "refresh" and "list"
-    if tab arg-1 is "refresh":
-        set tab completions for position 2 to getPrettyGestures(getRegisteredGestures())
-    else if tab arg-1 is "add":
-        set tab completions for position 2 to "<gesture sequence>"
+	set tab completions for position 1 to "toggle", "add", "remove" and "list"
+	if tab arg-1 is "add":
+		set tab completions for position 2 to "<gesture sequence>"
+	else if tab arg-1 is "remove":
+		set tab completions for position 2 to {gestures::gestures::*}
 
 command /gestures [<text>] [<text>]:
 	trigger:
 		if arg-1 is not set:
 			send "{@pb} &aGesture system by cheezburga, with concept from danny19990"
 		else:
+			set {_gesture} to getSafeGesture(arg-2) if arg-2 is set
 			if arg-1 is "toggle":
-				set {gestures::%player%} to true if ({gestures::%player%} is not true) else false
-				send "{@pb} &aCurrently registering gestures on sneak: %{gestures::%player%}%"
-			else if arg-1 is "add":
-                if arg-2 is set:
-                    if arg-2 matches "^(?:(up|down|left|right) )*(up|down|left|right)?$":
-        				if getRegisteredGestures() doesn't contain arg-2:
-        					registerGesture(arg-2)
-        					send "{@pb} &aRegistered event for gesture &9%arg-2%&a."
-        				else:
-        					send "{@pb} &cThat's already a registered gesture."
-                    else:
-                        send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
-                else:
-                    send "{@pb} &cMust provide a gesture sequence when trying to register a gesture."
-			else if arg-1 is "refresh":
-                if arg-2 is set:
-                    if arg-2 matches "^(?:(up|down|left|right) )*(up|down|left|right)?$":
-        				set {_g} to arg-2
-        				replace all " " in {_g} with "-"
-        				if getRegisteredGestures() doesn't contain "%{_g}%.sk":
-        					send "{@pb} &cThat's not a registered gesture."
-        				else:
-        					reload script "\gestures\%{_g}%.sk"
-        					send "{@pb} &aRefreshed the event corresponding to the &9%arg-2% &agesture."
-                    else:
-                        send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
-                else:
-                    send "{@pb} &cMust provide a gesture sequence when trying to refresh a gesture."
-			else if arg-1 is "delete" or "remove":
-                if arg-2 is set:
-                    if arg-2 matches "^(?:(up|down|left|right) )*(up|down|left|right)?$":
-                        if getRegisteredGestures() doesn't contain arg-2:
-                            removeGesture(arg-2)
-                            send "{@pb} &aDeleted the gesture file for gesture &9%arg-2%&a."
-                        else:
-                            send "{@pb} &cCannot delete that gesture as it doesn't exist."
-                    else:
-                        send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
-                else:
-                    send "{@pb} &cMust provide a gesture sequence when trying to delete a gesture."
-            else if arg-1 is "list":
-				if size of getRegisteredGestures() >= 1:
+				set {gestures::players::%player%} to true if ({gestures::players::%player%} is not true) else false
+				send "{@pb} &aCurrently registering gestures on sneak: %{gestures::players::%player%}%"
+			else if arg-1 is "register" or "add":
+				if arg-2 is set:
+					if {_gesture} matches "(?:(up|down|left|right)(?:\s+|$))+":
+						if {gestures::gestures::*} doesn't contain arg-2:
+							registerGesture({_gesture})
+							send "{@pb} &aRegistered event for gesture &9%arg-2%&a."
+						else:
+							send "{@pb} &cThat's already a registered gesture."
+					else:
+						send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
+				else:
+					send "{@pb} &cMust provide a gesture sequence when trying to register a gesture."
+			else if arg-1 is "deregister", "delete" or "remove":
+				if arg-2 is set:
+					if {_gesture} matches "(?:(up|down|left|right)(?:\s+|$))+":
+						if {gestures::gestures::*} contains arg-2:
+							removeGesture({_gesture})
+							send "{@pb} &aDeregistered the event associated with gesture &9%arg-2%&a."
+						else:
+							send "{@pb} &cCannot deregister that gesture as it doesn't exist."
+					else:
+						send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
+				else:
+					send "{@pb} &cMust provide a gesture sequence when trying to deregister a gesture."
+			else if arg-1 is "list":
+				if size of {gestures::gestures::*} >= 1:
 					listGestures(player)
 				else:
 					send "{@pb} &cCouldn't find any registered gestures."
