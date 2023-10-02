@@ -24,7 +24,7 @@ event "gesture":
 		if regex-1 is set:
 			set {_gesture} to getSafeGesture("%regex-1%")
 			if {_gesture} matches "(?:(up|down|left|right)(?:\s+|$))+":
-				if {gestures::gestures::*} contains {_gesture}: #DOESNT WORK. SHOULD IT EVEN THROW AN ERROR IF THIS IS THE CASE?
+				if {gestures::gestures::*} contains {_gesture}:
 					continue
 				else:
 					Skript.error("This gesture is not registered. Use /gestures add <gesture sequence>.")
