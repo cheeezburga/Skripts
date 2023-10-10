@@ -1,6 +1,10 @@
 options:
 	pb: &7[&b&lGestures&7]
 	regex: (?:(up|down|left|right)\s+)+
+	gestures-admin-permission: gestures.admin
+	allow-players-to-bind-commands: true # not currently implemented
+	allow-players-to-toggle-particles: true
+	show-particles-default: true
 
 import:
 	ch.njol.skript.Skript
@@ -13,6 +17,12 @@ on load:
 
 on join:
 	set {gestures::players::%player%} to true if ({gestures::players::%player%} is not set)
+	set {gestures::players::%player%::showParticles} to true if ({gestures::players::%player%::showParticles} is not set)
+
+function shouldShowParticles(p: player) :: boolean:
+	if {@allow-players-to-toggle-particles} is true:
+		return {gestures::players::%{_p}%::showParticles} ? false
+	return {@show-particles-default}
 
 function getSafeGesture(g: string) :: string:
 	return (join (...{_g}.split("\s+")) using " ")
@@ -64,8 +74,9 @@ on sneak toggle:
 				wait 1 tick
 				while player is sneaking:
 					set {_current} to player's eyes ~ (spherical vector radius 3, yaw (player's yaw), pitch (player's pitch))
-					draw 1 electric_spark at ({__center}, {__up}, {__down}, {__left}, {__right}) with offset vector(0, 0, 0) with extra 0 to player
-					send action bar "Left: %distance between {_current} and {__left}% Right: %distance between {_current} and {__right}% Up: %distance between {_current} and {__up}% Down: %distance between {_current} and {__down}%" to player
+					if shouldShowParticles(player) is true:
+						draw 1 electric_spark at ({__center}, {__up}, {__down}, {__left}, {__right}) with offset vector(0, 0, 0) with extra 0 to player
+					#send action bar "Left: %distance between {_current} and {__left}% Right: %distance between {_current} and {__right}% Up: %distance between {_current} and {__up}% Down: %distance between {_current} and {__down}%" to player
 					set {_select} to "Left" if (distance between {_current} and {__left}) < 0.4
 					set {_select} to "Right" if (distance between {_current} and {__right}) < 0.4
 					set {_select} to "Up" if (distance between {_current} and {__up}) < 0.4
@@ -89,11 +100,16 @@ function listGestures(p: player):
 		send "&7 - &a%loop-value%" to {_p}
 
 on tab complete of "/gestures":
-	set tab completions for position 1 to "toggle", "add", "remove" and "list"
-	if tab arg-1 is "add":
-		set tab completions for position 2 to "<gesture sequence>"
-	else if tab arg-1 is "remove":
-		set tab completions for position 2 to {gestures::gestures::*}
+	if player has permission "{@gestures-admin-permission}":
+		set {_1::*} to ("add", "remove", "list")
+	set tab completions for position 1 to "toggle" and {_1::*}
+	if tab arg-1 is "toggle":
+		set tab completions for position 2 to "gestures" and "particles"
+	if player has permission "{@gestures-admin-permission}":
+		if tab arg-1 is "add":
+			set tab completions for position 2 to "<gesture sequence>"
+		else if tab arg-1 is "remove":
+			set tab completions for position 2 to {gestures::gestures::*}
 
 command /gestures [<text>] [<text>]:
 	trigger:
@@ -102,34 +118,52 @@ command /gestures [<text>] [<text>]:
 		else:
 			set {_gesture} to getSafeGesture(arg-2) if arg-2 is set
 			if arg-1 is "toggle":
-				set {gestures::players::%player%} to true if ({gestures::players::%player%} is not true) else false
-				send "{@pb} &aCurrently registering gestures on sneak: %{gestures::players::%player%}%"
-			else if arg-1 is "register" or "add":
-				if arg-2 is set:
-					if {_gesture} matches "(?:(up|down|left|right)(?:\s+|$))+":
-						if {gestures::gestures::*} doesn't contain arg-2:
-							registerGesture({_gesture})
-							send "{@pb} &aRegistered event for gesture &9%arg-2%&a."
-						else:
-							send "{@pb} &cThat's already a registered gesture."
+				if arg-2 is not set:
+					set {gestures::players::%player%} to true if ({gestures::players::%player%} is not true) else false
+					send "{@pb} &aCurrently registering gestures on sneak: %{gestures::players::%player%}%"
+				else if arg-2 is "gesture" or "gestures":
+					set {gestures::players::%player%} to true if ({gestures::players::%player%} is not true) else false
+					send "{@pb} &aCurrently registering gestures on sneak: %{gestures::players::%player%}%"
+				else if arg-2 is "particle" or "particles":
+					if {@allow-players-to-toggle-particles} is true:
+						set {gestures::players::%player%::showParticles} to true if ({gestures::players::%player%::showParticles} is not true) else false
+						send "{@pb} &aShould show particles on gesture: %{gestures::players::%player%::showParticles}%"
 					else:
-						send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
+						send "{@pb} &cYou don't have permission to do this."
 				else:
-					send "{@pb} &cMust provide a gesture sequence when trying to register a gesture."
-			else if arg-1 is "deregister", "delete" or "remove":
-				if arg-2 is set:
-					if {_gesture} matches "(?:(up|down|left|right)(?:\s+|$))+":
-						if {gestures::gestures::*} contains arg-2:
-							removeGesture({_gesture})
-							send "{@pb} &aDeregistered the event associated with gesture &9%arg-2%&a."
+					send "{@pb} &cCannot toggle %arg-2% as it isn't an option."
+			else if arg-1 is "register", "add", "register", "delete", "remove" or "list":
+				if player has permission "{@gestures-admin-permission}":
+					if arg-1 is "register" or "add":
+						if arg-2 is set:
+							if {_gesture} matches "(?:(up|down|left|right)(?:\s+|$))+":
+								if {gestures::gestures::*} doesn't contain arg-2:
+									registerGesture({_gesture})
+									send "{@pb} &aRegistered event for gesture &9%arg-2%&a."
+								else:
+									send "{@pb} &cThat's already a registered gesture."
+							else:
+								send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
 						else:
-							send "{@pb} &cCannot deregister that gesture as it doesn't exist."
-					else:
-						send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
+							send "{@pb} &cMust provide a gesture sequence when trying to register a gesture."
+					else if arg-1 is "deregister", "delete" or "remove":
+						if arg-2 is set:
+							if {_gesture} matches "(?:(up|down|left|right)(?:\s+|$))+":
+								if {gestures::gestures::*} contains arg-2:
+									removeGesture({_gesture})
+									send "{@pb} &aDeregistered the event associated with gesture &9%arg-2%&a."
+								else:
+									send "{@pb} &cCannot deregister that gesture as it doesn't exist."
+							else:
+								send "{@pb} &cInvalid gesture sequence. Can only contain up, down, left or right."
+						else:
+							send "{@pb} &cMust provide a gesture sequence when trying to deregister a gesture."
+					else if arg-1 is "list":
+						if size of {gestures::gestures::*} >= 1:
+							listGestures(player)
+						else:
+							send "{@pb} &cCouldn't find any registered gestures."
 				else:
-					send "{@pb} &cMust provide a gesture sequence when trying to deregister a gesture."
-			else if arg-1 is "list":
-				if size of {gestures::gestures::*} >= 1:
-					listGestures(player)
-				else:
-					send "{@pb} &cCouldn't find any registered gestures."
+					send "{@pb} &cYou don't have permission to do this."
+			else:
+				send "{@pb} &cInvalid argument."
