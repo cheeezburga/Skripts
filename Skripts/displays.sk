@@ -108,7 +108,7 @@ function placeItem(p: player, d: entity):
 
 function addItem(p: player, d: entity):
 	set {_item} to (uuid tag "custom;child;item" of nbt of {_d}) parsed as entity
-	if {_p} is (uuid tag "custom;owner" of nbt of {_item}) parsed as entity:
+	if {_p} is (uuid tag "custom;owner" of nbt of {_item}) parsed as offline player:
 		if {_p}'s tool is not air:
 			if (full nbt of (1 of display item of {_item})) is (full nbt of (1 of {_p}'s tool)):
 				set {_a} to (item amount of display item of {_item})
@@ -129,7 +129,7 @@ function addItem(p: player, d: entity):
 
 function takeItem(p: player, d: entity):
 	set {_child} to (uuid tag "custom;child;item" of nbt of {_d}) parsed as entity
-	if {_p} is (uuid tag "custom;owner" of nbt of {_child}) parsed as entity:
+	if {_p} is (uuid tag "custom;owner" of nbt of {_child}) parsed as offline player:
 		give (display item of {_child}) to {_p}
 		kill {_child}
 		kill (uuid tag "custom;child;name" of nbt of {_d}) parsed as entity
@@ -159,6 +159,7 @@ function optionsLore(d: entity) :: strings:
 	set {_current} to byte tag "custom;options;current" of nbt of {_d}
 	set {_billboard} to "center" if ((byte tag "custom;options;billboard" of nbt of {_d}) is 1)
 	set {_billboard} to "fixed" if ((byte tag "custom;options;billboard" of nbt of {_d}) is 2)
+	set {_billboard} to "rotating" if ((byte tag "custom;options;billboard" of nbt of {_d}) is 3)
 	set {_showName} to true if ((byte tag "custom;options;showName" of nbt of {_d}) is 1) else false
 	set {_showOwner} to true if ((byte tag "custom;options;showOwner" of nbt of {_d}) is 1) else false
 	set {_lore::*} to "&fBillboard: &7%{_billboard}%", "&fShow name: &7%{_showName}%" and "&fShow owner: &7%{_showOwner}%"
@@ -185,9 +186,16 @@ function changeOption(o: text, d: entity):
 	if {_o} is "billboard":
 		if (byte tag "custom;options;billboard" of nbt of {_d}) is 1: #is center
 			add 1 to (byte tag "custom;options;billboard" of nbt of {_d})
+			add (nbt from "{Rotation:[0f,0f]}") to nbt of {_d}
 			set display billboard of {_d} to fixed
 		else if (byte tag "custom;options;billboard" of nbt of {_d}) is 2: #is fixed
-			subtract 1 from (byte tag "custom;options;billboard" of nbt of {_d})
+			add 1 to (byte tag "custom;options;billboard" of nbt of {_d})
+			while (byte tag "custom;options;billboard" of nbt of {_d}) is 3:
+				set {_r::*} to tag "Rotation" of nbt of {_d}
+				add (nbt from "{Rotation:[%{_r::1} + 5%f,0f]}") to nbt of {_d}
+				wait 1 tick
+		else if (byte tag "custom;options;billboard" of nbt of {_d}) is 3: #is rotating
+			subtract 2 from (byte tag "custom;options;billboard" of nbt of {_d})
 			set display billboard of {_d} to center
 	else if {_o} is "showName" or "showOwner":
 		set {_parent} to (uuid tag "custom;parentCase" of nbt of {_d}) parsed as entity
