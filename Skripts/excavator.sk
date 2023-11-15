@@ -1,0 +1,310 @@
+options:
+	offset: 5	
+
+on load:
+	set {excavator::offsets::1} to vector({@offset}, 0, {@offset})
+	set {excavator::offsets::2} to vector({@offset}, 0, -{@offset})
+	set {excavator::offsets::3} to vector(-{@offset}, 0, -{@offset})
+	set {excavator::offsets::4} to vector(-{@offset}, 0, {@offset})
+	set {excavator::tools::1} to (wooden pickaxe)
+	set {excavator::tools::2} to (stone pickaxe)
+	set {excavator::tools::3} to (iron pickaxe)
+	set {excavator::tools::4} to (gold pickaxe)
+	set {excavator::tools::5} to (diamond pickaxe)
+	set {excavator::tools::6} to (netherite pickaxe)
+
+on skript stop:
+	send "Backing up excavator inventories..." to console
+	loop indexes of {excavators::*}:
+		loop indexes of {excavators::%loop-value%::storage::*}:
+			set {_index} to 1
+			loop items in {excavators::%loop-value-1%::storage::%loop-value-2%}:
+				set {excavators::%loop-value-1%::storage::%loop-value-2%::backup::%{_index}%} to loop-value-3
+				add 1 to {_index}
+	send "Backed up excavator inventories." to console
+
+on skript start:
+	send "Restoring excavator inventories..." to console
+	loop indexes of {excavators::*}:
+		loop indexes of {excavators::%loop-value%::storage::*}:
+			set {_inv} to chest inventory with 6 rows named "Excavator Storage %loop-value-2%"
+			loop {excavators::%loop-value-1%::storage::%loop-value-2%::backup::*}:
+				add loop-value-3 to {_inv}
+			set {excavators::%loop-value-1%::storage::%loop-value-2%} to {_inv}
+			clear {excavators::%loop-value-1%::storage::%loop-value-2%::*}
+	send "Restored excavator inventories." to console
+
+on entity add to world:
+	if all:
+		(byte tag "custom;excavator" of nbt of event-entity) is 1
+		(metadata tag "isLooping" of event-entity) is not true
+	then:
+		doExcavatorLoop(event-entity)
+
+local function placeExcavatorArea(p: player, b: block, e: entity):
+	loop 4 times:
+		set {_offsets::%loop-value%} to ({_b} ~ {excavator::offsets::%loop-value%})
+	set {_type} to 1
+	loop 4 times:
+		if loop-value < 4:
+			set {_blocks::*} to (blocks within {_offsets::%loop-value%} and {_offsets::%loop-value + 1%})
+		else:
+			set {_blocks::*} to (blocks within {_offsets::%loop-value%} and {_offsets::1})
+		loop {_blocks::*}:
+			set (block at loop-value-2) to yellow concrete if ({_type} is 1) else black concrete
+			set {_type} to 0 if ({_type} is 1) else 1
+			add (block at loop-value-2) to {_total::*}
+	set {excavators::%uuid of {_e}%::area::*} to {_total::*}
+
+local function spawnExcavator(p: player, b: block, item: item) :: entity:
+	set {_tool} to (compound tag "tool" of nbt of {_item})
+	set {_storages} to (int tag "storages" of nbt of {_item})
+	spawn block display at ((exact location of {_b}) ~ vector(0,3,0)):
+		set display block data of entity to lodestone[]
+		set teleport duration of entity to 2
+		set (byte tag "custom;excavator" of nbt of entity) to 1
+		set (int tag "custom;placedX" of nbt of entity) to floor(x-coordinate of {_b})
+		set (int tag "custom;miningY" of nbt of entity) to (y-coordinate of {_b})
+		set (int tag "custom;placedZ" of nbt of entity) to floor(z-coordinate of {_b})
+		set (uuid tag "custom;placer" of nbt of entity) to {_p}
+		set {excavators::%uuid of entity%::tool} to nbt item of {_tool}
+		loop {_storages} times:
+			set {_inv} to chest inventory with 6 rows named "Excavator Storage %loop-value%"
+			set {excavators::%uuid of entity%::storage::%loop-value%} to {_inv}
+		set {_d} to entity
+	return {_d}
+
+local function spawnInteraction(e: entity) :: entity:
+	spawn interaction at ({_e} ~ vector(0.5,0,0.5)):
+		set (byte tag "custom;excavatorInteraction" of nbt of entity) to 1
+		set (uuid tag "custom;excavator" of nbt of entity) to {_e}
+		set (uuid tag "custom;interaction" of nbt of {_e}) to entity
+		set {_d} to entity
+	return {_d}
+
+local function getBlocksOnY(e: entity) :: blocks:
+	set {_y} to (int tag "custom;miningY" of nbt of {_e})
+	set {_x} to (int tag "custom;placedX" of nbt of {_e})
+	set {_z} to (int tag "custom;placedZ" of nbt of {_e})
+	set {_center} to location({_x}, {_y}, {_z}, (world of {_e}))
+	set {_tl} to block at ({_center} ~ ({excavator::offsets::1}++vector(-1,0,-1)))
+	set {_br} to block at ({_center} ~ {excavator::offsets::3}++vector(1,0,1))
+	return ((blocks within {_tl} and {_br}) where [input is not (air, black concrete, yellow concrete, water or lava)])
+
+local function getNextLocation(e: entity) :: location:
+	set {_blocks::*} to getBlocksOnY({_e})
+	#broadcast "blocks %{_blocks::*}%"
+	set {_next} to exact location of (first element out of {_blocks::*})
+	return {_next}
+
+local function drawLine(e: entity):
+	set {_loc1} to {_e} ~ vector(0.5,0,0.5)
+	set {_loc2} to {_loc1} ~ vector(0,-3,0)
+	set {_v} to vector from {_loc1} to {_loc2}
+	set vector length of {_v} to 0.25 # step size
+	set {_i} to 1
+	loop floor((distance between {_loc1} and {_loc2}) / 0.25) times:
+		draw 1 flame at {_loc1} with extra 0
+		set {_loc1} to {_loc1} ~ {_v}
+
+local function addToInventory(e: entity, items: items) :: boolean:
+	loop (indexes of {excavators::%uuid of {_e}%::storage::*}):
+		set {_inv} to {excavators::%uuid of {_e}%::storage::%loop-value%}
+		if {_inv} has space for {_items::*}:
+			add {_items::*} to {_inv}
+			return true
+	return false
+
+local function doExcavatorLoop(e: entity):
+	wait 1 tick
+	set {_interaction} to ((uuid tag "custom;interaction" of nbt of {_e}) parsed as entity)
+	while {_e} is alive:
+		set {_next} to getNextLocation({_e})
+		while {_next} is not set:
+			subtract 1 from (int tag "custom;miningY" of nbt of {_e})
+			set {_next} to getNextLocation({_e})
+		teleport {_e} to {_next} ~ vector(0,3,0)
+		teleport {_interaction} to ({_e} ~ vector(0.5,0,0.5))
+		wait 2 ticks
+		set {_hardness} to block hardness of (block at {_next})
+		set {_speed} to (block at {_next}).getDestroySpeed({excavators::%uuid of {_e}%::tool}, true)
+		set {_time} to {_hardness} / {_speed}
+		set {_time} to "%{_time}% seconds" parsed as timespan
+		set {_wait} to "%ticks of {_time}% ticks" parsed as timespan
+		set {_progress} to 0
+		loop 10 times:
+			if {_e} is alive:
+				add 0.1 to {_progress}
+				drawLine({_e})
+				make all players see damage of (block at {_next}) as {_progress}
+				wait {_wait}
+			else:
+				make all players see damage of (block at {_next}) as 0
+				exit 2 loops
+		set {_drops::*} to drops of (block at {_next}) using {excavators::%uuid of {_e}%::tool}
+		set {_added} to addToInventory({_e}, {_drops::*})
+		if {_added} is false:
+			drop {_drops::*} at {_next} ~ vector(0,0.5,0)
+			set glowing of {_e} to true
+			set glow color override of {_e} to bukkitColor(1,255,0,0)
+		else:
+			set glowing of {_e} to false
+		set (block at {_next}) to air
+
+local function getItem() :: item:
+	set {_i} to lodestone named "&f&lExcavator" with lore "&7Place this anywhere to set up an excavator!"
+	set {_storages} to 1
+	set {_tool} to {excavator::tools::1}
+	set (byte tag "excavator" of nbt of {_i}) to 1
+	set (compound tag "tool" of nbt of {_i}) to (full nbt of {_tool})
+	set (int tag "storages" of nbt of {_i}) to {_storages}
+	set {_tool} to "&b%type of {_tool}%" if ({_tool} is enchanted) else "&f%type of {_tool}%"
+	set line 2 of lore of {_i} to "&7Current tool: %{_tool}%"
+	set line 3 of lore of {_i} to "&7No. of storages: &f%{_storages}%"
+	return {_i}
+
+local function getItemFromExcavator(e: entity) :: item:
+	set {_i} to getItem()
+	set {_storages} to size of (indexes of {excavators::%uuid of {_e}%::storage::*})
+	set {_tool} to {excavators::%uuid of {_e}%::tool}
+	set (byte tag "excavator" of nbt of {_i}) to 1
+	set (compound tag "tool" of nbt of {_i}) to (full nbt of {_tool})
+	set (int tag "storages" of nbt of {_i}) to {_storages}
+	set {_tool} to "&b%type of {_tool}%" if ({_tool} is enchanted) else "&f%type of {_tool}%"
+	set line 2 of lore of {_i} to "&7Current tool: %{_tool}%"
+	set line 3 of lore of {_i} to "&7No. of storages: &f%{_storages}%"
+	return {_i}
+
+local function killExcavator(p: player, e: entity):
+	set {_excavator} to ((uuid tag "custom;excavator" of nbt of {_e}) parsed as entity)
+	loop {excavators::%uuid of {_excavator}%::area::*}:
+		set (block at loop-value) to air
+	loop indexes of {excavators::%uuid of {_excavator}%::storage::*}:
+		loop items in {excavators::%uuid of {_excavator}%::storage::%loop-value%}:
+			drop loop-value-2 at {_excavator}
+	delete {excavators::%uuid of {_excavator}%}
+	set {_item} to getItemFromExcavator({_excavator})
+	give or drop {_item} to {_p} # change to add cooldown on when other players can pick up
+	set {_placer} to ((uuid tag "custom;placer" of nbt of {_excavator}) parsed as player)
+	kill {_e} and {_excavator}
+	send action bar "&aAn excavator you placed has been destroyed." to {_placer}
+
+local function getUpgradeToolPrice(upgradeTool: item) :: number:
+	# ditch this system for an exponent option, which is how much the price goes up each time for each upgrade (would include enchants as well, not just types of pickaxe)
+	if {_upgradeTool} is stone pickaxe:
+		return 100
+	else if {_upgradeTool} is iron pickaxe:
+		return 500
+	else if {_upgradeTool} is gold pickaxe:
+		return 1000
+	else if {_upgradeTool} is diamond pickaxe:
+		return 5000
+	else if {_upgradeTool} is netherite pickaxe:
+		return 10000
+
+local function getUpgradeTool(currentTool: item) :: item:
+	loop {excavator::tools::*}:
+		if (plain {_currentTool}) is loop-value:
+			set {_next} to true
+			continue
+		return loop-value if ({_next} is set)
+	return {excavator::tools::6} # max tool
+
+local function upgradeTool(p: player, e: entity) :: boolean:
+	set {_currentTool} to {excavators::%uuid of {_e}%::tool}
+	set {_upgradedTool} to getUpgradeTool({_currentTool})
+	if ((type of {_currentTool}) is (type of {_upgradedTool})):
+		send action bar "&cAlready bought this upgrade." to {_p}
+		return false
+	set {_price} to getUpgradeToolPrice({_upgradedTool})
+	if {_p}'s balance >= {_price}:
+		subtract {_price} from {_p}'s balance
+		set {excavators::%uuid of {_e}%::tool} to {_upgradedTool}
+		send action bar "&aUpgraded your excavator's tool to %{_upgradedTool}%." to {_p}
+		return true
+	else:
+		send action bar "&cNot enough money to buy this upgrade." to {_p}
+	return false
+
+local function openExcavatorStorage(p: player, e: entity, inv: integer):
+	close {_p}'s inventory
+	open {excavators::%uuid of {_e}%::storage::%{_inv}%} to {_p}
+
+local function getNewStoragePrice(e: entity) :: number:
+	set {_storages} to (size of (indexes of {excavators::%uuid of {_e}%::storage::*}))
+	set {_next} to {_storages} + 1
+	return ceil(({_next}*10)^2.5)
+
+local function unlockNewStorage(p: player, e: entity):
+	set {_price} to getNewStoragePrice({_e})
+	if {_p}'s balance >= {_price}:
+		set {_storages} to (size of (indexes of {excavators::%uuid of {_e}%::storage::*}))
+		set {_inv} to chest inventory with 6 rows named "Excavator Storage %{_storages} + 1%"
+		set {excavators::%uuid of {_e}%::storage::%{_storages} + 1%} to {_inv}
+		send action bar "&aUnlocked a new storage for your excavator" to {_p}
+	else:
+		send action bar "&cNot enough money to buy this upgrade." to {_p}
+
+local function cycleStorageToOpen(p: player, e: entity):
+	set {_currentToOpen} to (metadata tag "storageToOpen" of {_p})
+	set {_storages} to (size of (indexes of {excavators::%uuid of {_e}%::storage::*}))
+	set {_nextToOpen} to ({_currentToOpen} + 1) if (({_currentToOpen} + 1) <= {_storages}) else 1
+
+local function openExcavatorOptions(p: player, e: entity):
+	close {_p}'s inventory
+	set {_tool} to {excavators::%uuid of {_e}%::tool}
+	set {_upgradeToolPrice} to getUpgradeToolPrice(getUpgradeTool({_tool}))
+	set {_unlockStoragePrice} to getNewStoragePrice({_e})
+	set (metadata tag "storageToOpen" of {_p}) to 1 if (metadata tag "storageToOpen" of {_p} is not set)
+	create gui with virtual chest inventory with 3 rows named "Excavator Options":
+		format gui slot ((integers from 0 to 11),13,(integers from 15 to 26)) with black stained glass pane
+		format gui slot 12 with {_tool} with lore ("&7Upgrade price: &6$%{_upgradeToolPrice}%" and "&7Click to upgrade!") with all flags hidden:
+			set {_upgraded} to upgradeTool({_p}, {_e})
+			openExcavatorOptions({_p}, {_e}) if {_upgraded} is true
+		format gui slot 14 with chest named "&fStorage" with lore ("&7Click to open &fStorage %(metadata tag "storageToOpen" of {_p})%&7!", "", "&7Right click to cycle." and "&7Middle click to unlock another for &6$%{_unlockStoragePrice}%&7."):
+			if gui click type is left mouse button:
+				openExcavatorStorage({_p}, {_e}, (metadata tag "storageToOpen" of {_p}))
+			else if gui click type is right mouse button:
+				cycleStorageToOpen({_p}, {_e})
+				set line 1 of lore of gui item to "&7Click to open &fStorage %(metadata tag "storageToOpen" of {_p})%&7!"
+			else if gui click type is middle mouse button:
+				unlockNewStorage({_p}, {_e})
+	open last gui to {_p}
+
+on place:
+	if (nbt of player's tool) has tag "excavator":
+		cancel event
+		set {_e} to spawnExcavator(player, event-block, player's tool)
+		set {_i} to spawnInteraction({_e})
+		remove 1 of player's tool from player
+		placeExcavatorArea(player, event-block, {_e})
+		doExcavatorLoop({_e})
+		set (metadata tag "isLooping" of {_e}) to true
+
+on damage of interaction:
+	if (byte tag "custom;excavatorInteraction" of nbt of victim) is 1:
+		killExcavator(attacker, victim)
+
+on right click on interaction:
+	if (byte tag "custom;excavatorInteraction" of nbt of event-entity) is 1:
+		set {_excavator} to ((uuid tag "custom;excavator" of nbt of event-entity) parsed as entity)
+		openExcavatorOptions(player, {_excavator})
+
+command /excavator [<text>]:
+	trigger:
+		if arg-1 is not set:
+			send "&aExcavator by cheezburga, concept from YouCanDream"
+		else:
+			if arg-1 is "get" or "give":
+				give getItem() to player
+				send action bar "&aGave you an excavator." to player
+			#else if arg-1 is "upgrade":
+			#	if (byte tag "excavator" of nbt of player's tool) is 1:
+			#		set {_tool} to (compound tag "tool" of nbt of (player's tool))
+			#		set {_tool} to nbt item from {_tool}
+			#		set {_upgrade} to getUpgradeTool({_tool})
+			#		set (compound tag "tool" of nbt of player's tool) to (full nbt of {_upgrade})
+			#		set (line 2 of lore of player's tool) to "&7Current tool: &f%{_upgrade}%"
+			#		send action bar "&aUpgraded your excavator to %{_upgrade}%." to player
+			else:
+				send "&cNot a valid argument."
