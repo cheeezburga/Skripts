@@ -35,6 +35,7 @@ on skript start:
 	send "Restored excavator inventories." to console
 
 on entity add to world:
+	wait 1 tick
 	if all:
 		(byte tag "custom;excavator" of nbt of event-entity) is 1
 		(metadata tag "isLooping" of event-entity) is not true
@@ -109,13 +110,13 @@ local function drawLine(e: entity):
 
 local function addToInventory(e: entity, items: items) :: boolean:
 	loop (indexes of {excavators::%uuid of {_e}%::storage::*}):
-		set {_inv} to {excavators::%uuid of {_e}%::storage::%loop-value%}
-		if {_inv} has space for {_items::*}:
-			add {_items::*} to {_inv}
+		if {excavators::%uuid of {_e}%::storage::%loop-value%} has space for {_items::*}:
+			add {_items::*} to {excavators::%uuid of {_e}%::storage::%loop-value%}
 			return true
 	return false
 
 local function doExcavatorLoop(e: entity):
+	broadcast "called loop function"
 	wait 1 tick
 	set {_interaction} to ((uuid tag "custom;interaction" of nbt of {_e}) parsed as entity)
 	while {_e} is alive:
@@ -143,13 +144,13 @@ local function doExcavatorLoop(e: entity):
 				exit 2 loops
 		set {_drops::*} to drops of (block at {_next}) using {excavators::%uuid of {_e}%::tool}
 		set {_added} to addToInventory({_e}, {_drops::*})
-		if {_added} is false:
+		set (block at {_next}) to air
+		if {_added} is true:
+			set glowing of {_e} to false
+		else:
 			drop {_drops::*} at {_next} ~ vector(0,0.5,0)
 			set glowing of {_e} to true
 			set glow color override of {_e} to bukkitColor(1,255,0,0)
-		else:
-			set glowing of {_e} to false
-		set (block at {_next}) to air
 
 local function getItem() :: item:
 	set {_i} to lodestone named "&f&lExcavator" with lore "&7Place this anywhere to set up an excavator!"
@@ -182,8 +183,9 @@ local function killExcavator(p: player, e: entity):
 	loop indexes of {excavators::%uuid of {_excavator}%::storage::*}:
 		loop items in {excavators::%uuid of {_excavator}%::storage::%loop-value%}:
 			drop loop-value-2 at {_excavator}
-	delete {excavators::%uuid of {_excavator}%}
 	set {_item} to getItemFromExcavator({_excavator})
+	clear {excavators::%uuid of {_excavator}%::*}
+	delete {excavators::%uuid of {_excavator}%}
 	give or drop {_item} to {_p} # change to add cooldown on when other players can pick up
 	set {_placer} to ((uuid tag "custom;placer" of nbt of {_excavator}) parsed as player)
 	kill {_e} and {_excavator}
