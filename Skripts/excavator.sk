@@ -2,6 +2,7 @@ options:
 	offset: 5
 	enchants-per-tool: 3
 	exponent: 1.25
+	autoswitch-price: 10000
 
 on load:
 	set {excavator::offsets::1} to vector({@offset}, 0, {@offset})
@@ -62,6 +63,7 @@ local function placeExcavatorArea(p: player, b: block, e: entity):
 local function spawnExcavator(p: player, b: block, item: item) :: entity:
 	set {_tool} to (compound tag "tool" of nbt of {_item})
 	set {_storages} to (int tag "storages" of nbt of {_item})
+	set {_autoswitch} to (byte tag "autoswitch" of nbt of {_item})
 	spawn block display at ((exact location of {_b}) ~ vector(0,3,0)):
 		set display block data of entity to lodestone[]
 		set teleport duration of entity to 2
@@ -71,6 +73,7 @@ local function spawnExcavator(p: player, b: block, item: item) :: entity:
 		set (int tag "custom;placedZ" of nbt of entity) to floor(z-coordinate of {_b})
 		set (uuid tag "custom;placer" of nbt of entity) to {_p}
 		set {excavators::%uuid of entity%::tool} to nbt item of {_tool}
+		set {excavators::%uuid of entity%::autoswitch} to {_autoswitch}
 		loop {_storages} times:
 			set {_inv} to chest inventory with 6 rows named "Excavator Storage %loop-value%"
 			set {excavators::%uuid of entity%::storage::%loop-value%} to {_inv}
@@ -127,13 +130,16 @@ local function doExcavatorLoop(e: entity):
 			set {_next} to getNextLocation({_e})
 		teleport {_e} to {_next} ~ vector(0,3,0)
 		teleport {_interaction} to ({_e} ~ vector(0.5,0,0.5))
-		wait 2 ticks
+		wait 2 ticks # the same as the teleport duration of {_e}. gives it time to interpolate
+		if {excavators::%uuid of {_e}%::autoswitch} is 1:
+			if isPreferredTool({excavators::%uuid of {_e}%::tool}, (block at {_next})) is false:
+				if isPreferredTool(getEquivalentTool({excavators::%uuid of {_e}%::tool}), (block at {_next})) is true: # if more tools (axes, hoes, etc), this would need to change
+					switchTool({_e})
 		set {_hardness} to block hardness of (block at {_next})
 		set {_speed} to (block at {_next}).getDestroySpeed({excavators::%uuid of {_e}%::tool}, true)
 		set {_time} to {_hardness} / {_speed}
 		set {_time} to "%{_time}% seconds" parsed as timespan
 		set {_wait} to "%ticks of {_time}% ticks" parsed as timespan
-		#broadcast {_wait} and ticks of {_time}
 		set {_progress} to 0
 		loop 10 times:
 			if {_e} is alive:
@@ -156,26 +162,30 @@ local function doExcavatorLoop(e: entity):
 
 local function getExcavatorItem() :: item:
 	set {_i} to lodestone named "&f&lExcavator" with lore "&7Place this anywhere to set up an excavator!"
-	set {_storages} to 1
 	set {_tool} to ("%{excavator::tools::1}% pickaxe" parsed as itemtype)
+	set {_toolLore} to "&b%type of {_tool}%" if ({_tool} is enchanted) else "&f%type of {_tool}%"
 	set (byte tag "excavator" of nbt of {_i}) to 1
 	set (compound tag "tool" of nbt of {_i}) to (full nbt of {_tool})
-	set (int tag "storages" of nbt of {_i}) to {_storages}
-	set {_tool} to "&b%type of {_tool}%" if ({_tool} is enchanted) else "&f%type of {_tool}%"
-	set line 2 of lore of {_i} to "&7Current tool: %{_tool}%"
-	set line 3 of lore of {_i} to "&7No. of storages: &f%{_storages}%"
+	set (byte tag "autoswitch" of nbt of {_i}) to 0
+	set (int tag "storages" of nbt of {_i}) to 1
+	set line 2 of lore of {_i} to "&7Current tool: %{_toolLore}%"
+	set line 3 of lore of {_i} to "&7No. of storages: &f1"
+	set line 4 of lore of {_i} to "&7Autoswitcher: &cnot unlocked"
 	return {_i}
 
 local function getExcavatorItemFromEntity(e: entity) :: item:
 	set {_i} to getExcavatorItem()
 	set {_storages} to size of (indexes of {excavators::%uuid of {_e}%::storage::*})
 	set {_tool} to {excavators::%uuid of {_e}%::tool}
+	set {_toolLore} to "&b%type of {_tool}%" if ({_tool} is enchanted) else "&f%type of {_tool}%"
+	set {_autoswitch} to "&aunlocked" if ({excavators::%uuid of {_e}%::autoswitch} is 1) else "&cnot unlocked"
 	set (byte tag "excavator" of nbt of {_i}) to 1
 	set (compound tag "tool" of nbt of {_i}) to (full nbt of {_tool})
+	set (byte tag "autoswitch" of nbt of {_i}) to {excavators::%uuid of {_e}%::autoswitch}
 	set (int tag "storages" of nbt of {_i}) to {_storages}
-	set {_tool} to "&b%type of {_tool}%" if ({_tool} is enchanted) else "&f%type of {_tool}%"
-	set line 2 of lore of {_i} to "&7Current tool: %{_tool}%"
+	set line 2 of lore of {_i} to "&7Current tool: %{_toolLore}%"
 	set line 3 of lore of {_i} to "&7No. of storages: &f%{_storages}%"
+	set line 4 of lore of {_i} to "&7Autoswitcher: &f%{_autoswitch}%"
 	return {_i}
 
 local function killExcavator(p: player, e: entity):
@@ -246,6 +256,10 @@ local function upgradeTool(p: player, e: entity) :: boolean:
 		send action bar "&cNot enough money to buy this upgrade." to {_p}
 	return false
 
+local function isPreferredTool(currentTool: item, b: block) :: boolean:
+	set {_type} to getType({_currentTool})
+	return true if ({_b} is tagged with (minecraft block tag "minecraft:mineable/%{_type}%")) else false
+
 local function switchTool(e: entity) :: boolean:
 	set {_newTool} to getEquivalentTool({excavators::%uuid of {_e}%::tool})
 	set {excavators::%uuid of {_e}%::tool} to {_newTool}
@@ -274,6 +288,19 @@ local function cycleStorageToOpen(p: player, e: entity):
 	set {_storages} to (size of (indexes of {excavators::%uuid of {_e}%::storage::*}))
 	set (metadata tag "storageToOpen" of {_p}) to ({_currentToOpen} + 1) if (({_currentToOpen} + 1) <= {_storages}) else 1
 
+local function unlockAutoswitcher(p: player, e: entity) :: boolean:
+	if {excavators::%uuid of {_e}%::autoswitch} is 0:
+		if {_p}'s balance >= {@autoswitch-price}:
+			set {excavators::%uuid of {_e}%::autoswitch} to 1
+			send action bar "&aUnlocked the autoswitcher for that excavator." to {_p}
+			return true
+		else:
+			send action bar "&cNot enough money to buy this upgrade." to {_p}
+			return false
+	else:
+		send action bar "&cAlready unlocked the autoswitcher for this excavator." to {_p}
+		return false
+
 local function openExcavatorOptions(p: player, e: entity):
 	close {_p}'s inventory
 	set {_tool} to {excavators::%uuid of {_e}%::tool}
@@ -283,8 +310,9 @@ local function openExcavatorOptions(p: player, e: entity):
 	set {_upgradeToolPrice} to getUpgradeToolPrice(getUpgradeTool({_tool}))
 	set {_unlockStoragePrice} to getNewStoragePrice({_e})
 	set (metadata tag "storageToOpen" of {_p}) to 1 if (metadata tag "storageToOpen" of {_p} is not set)
+	set {_autoswitch} to "&aunlocked" if ({excavators::%uuid of {_e}%::autoswitch} is 1) else "&cnot unlocked &7(click to purchase for &6$10,000&7)"
 	create gui with virtual chest inventory with 3 rows named "Excavator Options":
-		format gui slot ((integers from 0 to 11),13,(integers from 15 to 26)) with black stained glass pane
+		format gui slot ((integers from 0 to 11) and (integers from 15 to 26)) with black stained glass pane
 		format gui slot 12 with {_tool} named {_toolName} with lore ("&7Upgrade price: &6$%{_upgradeToolPrice}%", "", "&7Click to upgrade!" and "&7Right click to switch to alternative tool.") with all flags hidden:
 			if gui click type is left mouse button:
 				set {_upgraded} to upgradeTool({_p}, {_e})
@@ -292,7 +320,7 @@ local function openExcavatorOptions(p: player, e: entity):
 			else if gui click type is right mouse button:
 				switchTool({_e})
 				openExcavatorOptions({_p}, {_e})
-		format gui slot 14 with chest named "&fStorage" with lore ("&7Click to open &fStorage %(metadata tag "storageToOpen" of {_p})%&7!", "", "&7Right click to cycle." and "&7Middle click to unlock another for &6$%{_unlockStoragePrice}%&7."):
+		format gui slot 13 with chest named "&fStorage" with lore ("&7Click to open &fStorage %(metadata tag "storageToOpen" of {_p})%&7!", "", "&7Right click to cycle." and "&7Middle click to unlock another for &6$%{_unlockStoragePrice}%&7."):
 			if gui click type is left mouse button:
 				openExcavatorStorage({_p}, {_e}, (metadata tag "storageToOpen" of {_p}))
 			else if gui click type is right mouse button:
@@ -300,6 +328,9 @@ local function openExcavatorOptions(p: player, e: entity):
 				set (line 1 of lore of gui item) to "&7Click to open &fStorage %(metadata tag "storageToOpen" of {_p})%&7!"
 			else if gui click type is middle mouse button:
 				unlockNewStorage({_p}, {_e})
+		format gui slot 14 with arrow named "&fAuto Switcher" with lore ("&7Currently: %{_autoswitch}%"):
+			set {_unlocked} to unlockAutoswitcher({_p}, {_e})
+			openExcavatorOptions({_p}, {_e}) if {_unlocked} is true
 	open last gui to {_p}
 
 on place:
