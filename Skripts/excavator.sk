@@ -1,20 +1,29 @@
 options:
-	offset: 5
-	enchants-per-tool: 3
-	exponent: 1.25
-	autoswitch-price: 10000
+	offset: 5 # the size of the area the excavator digs
+	enchants-per-tool: 3 # the number of levels of efficiency that the tool can have before upgrading to the next tier
+	exponent: 1.25 # the amount that the price increases for tool leveling - ((no. of levels on tool)*10)^(exponent)
+	autoswitch-price: 10000 # the price to unlock the autoswitch
+	have-fuel-on-get: 8 # the amount of fuel the excavator should have by default
+	use-fuel: true # set to false if you want excavators to automatically add fuel to never run out. will still show in lore of item
 
 on load:
 	set {excavator::offsets::1} to vector({@offset}, 0, {@offset})
 	set {excavator::offsets::2} to vector({@offset}, 0, -{@offset})
 	set {excavator::offsets::3} to vector(-{@offset}, 0, -{@offset})
 	set {excavator::offsets::4} to vector(-{@offset}, 0, {@offset})
+
+	# the tiers for the tool upgrades
 	set {excavator::tools::1} to "wooden"
 	set {excavator::tools::2} to "stone"
 	set {excavator::tools::3} to "iron"
 	set {excavator::tools::4} to "gold"
 	set {excavator::tools::5} to "diamond"
 	set {excavator::tools::6} to "netherite"
+
+	# the number of blocks the excavator will mine for a specific fuel source
+	# e.g. if a coal is input, 2 is added to the fuel (the excavator will mine 2 blocks per coal)
+	set {excavator::fuels::coal} to 2
+	set {excavator::fuels::charcoal} to 1
 
 on skript stop:
 	send "Backing up excavator inventories..." to console
@@ -64,6 +73,7 @@ local function spawnExcavator(p: player, b: block, item: item) :: entity:
 	set {_tool} to (compound tag "tool" of nbt of {_item})
 	set {_storages} to (int tag "storages" of nbt of {_item})
 	set {_autoswitch} to (byte tag "autoswitch" of nbt of {_item})
+	set {_fuel} to (int tag "fuel" of nbt of {_item})
 	spawn block display at ((exact location of {_b}) ~ vector(0,3,0)):
 		set display block data of entity to lodestone[]
 		set teleport duration of entity to 2
@@ -74,6 +84,7 @@ local function spawnExcavator(p: player, b: block, item: item) :: entity:
 		set (uuid tag "custom;placer" of nbt of entity) to {_p}
 		set {excavators::%uuid of entity%::tool} to nbt item of {_tool}
 		set {excavators::%uuid of entity%::autoswitch} to {_autoswitch}
+		set {excavators::%uuid of entity%::fuel} to {_fuel}
 		loop {_storages} times:
 			set {_inv} to chest inventory with 6 rows named "Excavator Storage %loop-value%"
 			set {excavators::%uuid of entity%::storage::%loop-value%} to {_inv}
@@ -121,9 +132,10 @@ local function addToInventory(e: entity, items: items) :: boolean:
 	return false
 
 local function doExcavatorLoop(e: entity):
+	set (metadata tag "isLooping" of {_e}) to true
 	wait 1 tick
 	set {_interaction} to ((uuid tag "custom;interaction" of nbt of {_e}) parsed as entity)
-	while {_e} is alive:
+	while {excavators::%uuid of {_e}%::fuel} > 0:
 		set {_next} to getNextLocation({_e})
 		while {_next} is not set:
 			subtract 1 from (int tag "custom;miningY" of nbt of {_e})
@@ -159,6 +171,9 @@ local function doExcavatorLoop(e: entity):
 			drop {_drops::*} at {_next} ~ vector(0,0.5,0)
 			set glowing of {_e} to true
 			set glow color override of {_e} to bukkitColor(1,255,0,0)
+		subtract 1 from {excavators::%uuid of {_e}%::fuel}
+		add 1 to {excavators::%uuid of {_e}%::fuel} if ({@use-fuel} is false)
+	set (metadata tag "isLooping" of {_e}) to false
 
 local function getExcavatorItem() :: item:
 	set {_i} to lodestone named "&f&lExcavator" with lore "&7Place this anywhere to set up an excavator!"
@@ -166,11 +181,13 @@ local function getExcavatorItem() :: item:
 	set {_toolLore} to "&b%type of {_tool}%" if ({_tool} is enchanted) else "&f%type of {_tool}%"
 	set (byte tag "excavator" of nbt of {_i}) to 1
 	set (compound tag "tool" of nbt of {_i}) to (full nbt of {_tool})
-	set (byte tag "autoswitch" of nbt of {_i}) to 0
 	set (int tag "storages" of nbt of {_i}) to 1
+	set (byte tag "autoswitch" of nbt of {_i}) to 0
+	set (int tag "fuel" of nbt of {_i}) to {@have-fuel-on-get}
 	set line 2 of lore of {_i} to "&7Current tool: %{_toolLore}%"
 	set line 3 of lore of {_i} to "&7No. of storages: &f1"
 	set line 4 of lore of {_i} to "&7Autoswitcher: &cnot unlocked"
+	set line 5 of lore of {_i} to "&7Fuel: &f{@have-fuel-on-get}"
 	return {_i}
 
 local function getExcavatorItemFromEntity(e: entity) :: item:
@@ -183,9 +200,11 @@ local function getExcavatorItemFromEntity(e: entity) :: item:
 	set (compound tag "tool" of nbt of {_i}) to (full nbt of {_tool})
 	set (byte tag "autoswitch" of nbt of {_i}) to {excavators::%uuid of {_e}%::autoswitch}
 	set (int tag "storages" of nbt of {_i}) to {_storages}
+	set (int tag "fuel" of nbt of {_i}) to {excavators::%uuid of {_e}%::fuel}
 	set line 2 of lore of {_i} to "&7Current tool: %{_toolLore}%"
 	set line 3 of lore of {_i} to "&7No. of storages: &f%{_storages}%"
 	set line 4 of lore of {_i} to "&7Autoswitcher: &f%{_autoswitch}%"
+	set line 5 of lore of {_i} to "&7Fuel: &f%{excavators::%uuid of {_e}%::fuel}%"
 	return {_i}
 
 local function killExcavator(p: player, e: entity):
@@ -301,6 +320,47 @@ local function unlockAutoswitcher(p: player, e: entity) :: boolean:
 		send action bar "&cAlready unlocked the autoswitcher for this excavator." to {_p}
 		return false
 
+local function openFuel(p: player, e: entity):
+	close {_p}'s inventory
+	set (metadata tag "fuelFor" of {_p}) to {_e}
+	create gui with virtual chest inventory with 3 rows named "Excavator Fuel":
+		format gui slot ((integers from 0 to 12) and (integers from 14 to 26)) with black stained glass pane named "&fDeposit fuel here" with lore ("&7Drop your coal (%{excavator::fuels::coal}%) or charcoal (%{excavator::fuels::charcoal}%) in the middle slot." and "&cWarning: &7this cannot be undone.")
+	open last gui to {_p}
+
+local function increaseFuelAmount(amount: integer, type: itemtype) :: integer:
+	loop (indexes of {excavator::fuels::*}):
+		set {_index} to loop-value parsed as itemtype
+		if {_index} is {_type}:
+			set {_return} to ({_amount} * {excavator::fuels::%loop-value%})
+	return {_return}
+
+on inventory click:
+	if (metadata tag "fuelFor" of player) is set:
+		if holder of event-inventory is not player:
+			set {_e} to (metadata tag "fuelFor" of player)
+			if index of clicked slot is 13:
+				cancel event
+				if player's cursor slot is coal or charcoal:
+					if click type is left mouse button:
+						set {_amount} to (item amount of player's cursor slot)
+					else if click type is right mouse button:
+						set {_amount} to 1
+					set {_increase} to increaseFuelAmount({_amount}, (type of player's cursor slot))
+					subtract {_amount} from (item amount of player's cursor slot)
+					add {_increase} to {excavators::%uuid of {_e}%::fuel}
+					doExcavatorLoop({_e}) if (metadata tag "isLooping" of {_e}) is false
+			else if click type is left mouse button with shift:
+				cancel event
+				if clicked slot is coal or charcoal:
+					add increaseFuelAmount((item amount of clicked slot), (type of clicked slot)) to {excavators::%uuid of {_e}%::fuel}
+					set clicked slot to air
+					doExcavatorLoop({_e}) if (metadata tag "isLooping" of {_e}) is false
+
+on inventory close:
+	if (metadata tag "fuelFor" of player) is set:
+		wait 1 tick
+		clear (metadata tag "fuelFor" of player)
+
 local function openExcavatorOptions(p: player, e: entity):
 	close {_p}'s inventory
 	set {_tool} to {excavators::%uuid of {_e}%::tool}
@@ -312,15 +372,14 @@ local function openExcavatorOptions(p: player, e: entity):
 	set (metadata tag "storageToOpen" of {_p}) to 1 if (metadata tag "storageToOpen" of {_p} is not set)
 	set {_autoswitch} to "&aunlocked" if ({excavators::%uuid of {_e}%::autoswitch} is 1) else "&cnot unlocked &7(click to purchase for &6$10,000&7)"
 	create gui with virtual chest inventory with 3 rows named "Excavator Options":
-		format gui slot ((integers from 0 to 11) and (integers from 15 to 26)) with black stained glass pane
-		format gui slot 12 with {_tool} named {_toolName} with lore ("&7Upgrade price: &6$%{_upgradeToolPrice}%", "", "&7Click to upgrade!" and "&7Right click to switch to alternative tool.") with all flags hidden:
+		format gui slot 10 with {_tool} named {_toolName} with lore ("&7Upgrade price: &6$%{_upgradeToolPrice}%", "", "&7Click to upgrade!" and "&7Right click to switch to alternative tool.") with all flags hidden:
 			if gui click type is left mouse button:
 				set {_upgraded} to upgradeTool({_p}, {_e})
 				openExcavatorOptions({_p}, {_e}) if {_upgraded} is true
 			else if gui click type is right mouse button:
 				switchTool({_e})
 				openExcavatorOptions({_p}, {_e})
-		format gui slot 13 with chest named "&fStorage" with lore ("&7Click to open &fStorage %(metadata tag "storageToOpen" of {_p})%&7!", "", "&7Right click to cycle." and "&7Middle click to unlock another for &6$%{_unlockStoragePrice}%&7."):
+		format gui slot 12 with chest named "&fStorage" with lore ("&7Click to open &fStorage %(metadata tag "storageToOpen" of {_p})%&7!", "", "&7Right click to cycle." and "&7Middle click to unlock another for &6$%{_unlockStoragePrice}%&7."):
 			if gui click type is left mouse button:
 				openExcavatorStorage({_p}, {_e}, (metadata tag "storageToOpen" of {_p}))
 			else if gui click type is right mouse button:
@@ -331,6 +390,10 @@ local function openExcavatorOptions(p: player, e: entity):
 		format gui slot 14 with arrow named "&fAuto Switcher" with lore ("&7Currently: %{_autoswitch}%"):
 			set {_unlocked} to unlockAutoswitcher({_p}, {_e})
 			openExcavatorOptions({_p}, {_e}) if {_unlocked} is true
+		format gui slot 16 with furnace named "&fFuel" with lore ("&7Currently: &f%{excavators::%uuid of {_e}%::fuel}%" and "&7Click to deposit some more."):
+			openFuel({_p}, {_e})
+		loop ((3*9)-4) times:
+			format next gui slot with black stained glass pane
 	open last gui to {_p}
 
 on place:
@@ -341,7 +404,6 @@ on place:
 		remove 1 of player's tool from player
 		placeExcavatorArea(player, event-block, {_e})
 		doExcavatorLoop({_e})
-		set (metadata tag "isLooping" of {_e}) to true
 
 on damage of interaction:
 	if (byte tag "custom;excavatorInteraction" of nbt of victim) is 1:
@@ -360,13 +422,5 @@ command /excavator [<text>]:
 			if arg-1 is "get" or "give":
 				give getExcavatorItem() to player
 				send action bar "&aGave you an excavator." to player
-			#else if arg-1 is "upgrade":
-			#	if (byte tag "excavator" of nbt of player's tool) is 1:
-			#		set {_tool} to (compound tag "tool" of nbt of (player's tool))
-			#		set {_tool} to nbt item from {_tool}
-			#		set {_upgrade} to getUpgradeTool({_tool})
-			#		set (compound tag "tool" of nbt of player's tool) to (full nbt of {_upgrade})
-			#		set (line 2 of lore of player's tool) to "&7Current tool: &f%{_upgrade}%"
-			#		send action bar "&aUpgraded your excavator to %{_upgrade}%." to player
 			else:
 				send "&cNot a valid argument."
