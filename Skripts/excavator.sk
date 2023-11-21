@@ -4,7 +4,7 @@ options:
 	exponent: 1.25 # the amount that the price increases for tool leveling - ((no. of levels on tool)*10)^(exponent)
 	autoswitch-price: 10000 # the price to unlock the autoswitch
 	have-fuel-on-get: 8 # the amount of fuel the excavator should have by default
-	use-fuel: true # set to false if you want excavators to automatically add fuel to never run out. will still show in lore of item
+	require-fuel: true # set to false if you want excavators to automatically add fuel to never run out. will still show in lore of item
 
 on load:
 	set {excavator::offsets::1} to vector({@offset}, 0, {@offset})
@@ -157,10 +157,10 @@ local function doExcavatorLoop(e: entity):
 			if {_e} is alive:
 				add 0.1 to {_progress}
 				drawLine({_e})
-				make all players see damage of (block at {_next}) as {_progress}
+				make all players see damage of (block at {_next}) as {_progress} from {_e}
 				wait {_wait}
 			else:
-				make all players see damage of (block at {_next}) as 0
+				make all players see damage of (block at {_next}) as 0 from {_e}
 				exit 2 loops
 		set {_drops::*} to drops of (block at {_next}) using {excavators::%uuid of {_e}%::tool}
 		set {_added} to addToInventory({_e}, {_drops::*})
@@ -336,11 +336,11 @@ local function increaseFuelAmount(amount: integer, type: itemtype) :: integer:
 
 on inventory click:
 	if (metadata tag "fuelFor" of player) is set:
+		set {_e} to (metadata tag "fuelFor" of player)
 		if holder of event-inventory is not player:
-			set {_e} to (metadata tag "fuelFor" of player)
 			if index of clicked slot is 13:
 				cancel event
-				if player's cursor slot is coal or charcoal:
+				if (indexes of {excavator::fuels::*}) contains ("%type of player's cursor slot%"):
 					if click type is left mouse button:
 						set {_amount} to (item amount of player's cursor slot)
 					else if click type is right mouse button:
@@ -349,12 +349,12 @@ on inventory click:
 					subtract {_amount} from (item amount of player's cursor slot)
 					add {_increase} to {excavators::%uuid of {_e}%::fuel}
 					doExcavatorLoop({_e}) if (metadata tag "isLooping" of {_e}) is false
-			else if click type is left mouse button with shift:
-				cancel event
-				if clicked slot is coal or charcoal:
-					add increaseFuelAmount((item amount of clicked slot), (type of clicked slot)) to {excavators::%uuid of {_e}%::fuel}
-					set clicked slot to air
-					doExcavatorLoop({_e}) if (metadata tag "isLooping" of {_e}) is false
+		else if click type is left mouse button with shift:
+			cancel event
+			if (indexes of {excavator::fuels::*}) contains ("%type of clicked slot%"):
+				add increaseFuelAmount((item amount of clicked slot), (type of clicked slot)) to {excavators::%uuid of {_e}%::fuel}
+				set clicked slot to air
+				doExcavatorLoop({_e}) if (metadata tag "isLooping" of {_e}) is false
 
 on inventory close:
 	if (metadata tag "fuelFor" of player) is set:
@@ -369,7 +369,7 @@ local function openExcavatorOptions(p: player, e: entity):
 	set {_toolName} to "%{_c}%%{_toolName}% &f&l(%(level of efficiency on {_tool}) ? 0%)"
 	set {_upgradeToolPrice} to getUpgradeToolPrice(getUpgradeTool({_tool}))
 	set {_unlockStoragePrice} to getNewStoragePrice({_e})
-	set (metadata tag "storageToOpen" of {_p}) to 1 if (metadata tag "storageToOpen" of {_p} is not set)
+	set (metadata tag "storageToOpen" of {_p}) to 1
 	set {_autoswitch} to "&aunlocked" if ({excavators::%uuid of {_e}%::autoswitch} is 1) else "&cnot unlocked &7(click to purchase for &6$10,000&7)"
 	create gui with virtual chest inventory with 3 rows named "Excavator Options":
 		format gui slot 10 with {_tool} named {_toolName} with lore ("&7Upgrade price: &6$%{_upgradeToolPrice}%", "", "&7Click to upgrade!" and "&7Right click to switch to alternative tool.") with all flags hidden:
@@ -387,6 +387,8 @@ local function openExcavatorOptions(p: player, e: entity):
 				set (line 1 of lore of gui item) to "&7Click to open &fStorage %(metadata tag "storageToOpen" of {_p})%&7!"
 			else if gui click type is middle mouse button:
 				unlockNewStorage({_p}, {_e})
+				set {_unlockStoragePrice} to getNewStoragePrice({_e})
+				set (line 4 of lore of gui item) to "&7Middle click to unlock another for &6$%{_unlockStoragePrice}%&7."
 		format gui slot 14 with arrow named "&fAuto Switcher" with lore ("&7Currently: %{_autoswitch}%"):
 			set {_unlocked} to unlockAutoswitcher({_p}, {_e})
 			openExcavatorOptions({_p}, {_e}) if {_unlocked} is true
