@@ -1,165 +1,163 @@
 options:
-    prefix: [Text Displays]
-    pb: &7[&b&lText Displays&7]
+	pb: &7[&b&lText Displays&7]
 
 function doesDisplayExist(id: text) :: boolean:
-    if indexes of {displays::supers::*} contains {_id}:
-        return true
-    return false
+	if indexes of {displays::supers::*} contains {_id}:
+		return true
+	return false
 
 function getSuper(id: text, line: int) :: entity:
-    return ({displays::supers::%{_id}%::lines::%{_line}%::entity} parsed as entity)
+	return ({displays::supers::%{_id}%::lines::%{_line}%::entity} parsed as entity)
 
 function getComponentFromText(text: strings) :: text component:
-    if "%{_text::*}%" contains "&":
-        return (text component of "%{_text::*}%")
-    else:
-        return (mini message from "%{_text::*}%")
+	return (text component of "%{_text::*}%") if ("%{_text::*}%" contains "&") else (mini message from "%{_text::*}%")
 
 function createSuper(p: player, id: text, line: int, text: strings):
-    set {_loc} to {_p}'s eyes if (doesDisplayExist({_id}) is false) else (location of ({displays::supers::%{_id}%::lines::1::entity} parsed as entity))
-    set {_lines::*} to "%{_text::*}%" split at "||"
-    loop indexes of {_lines::*}:
-        set {_l} to loop-value parsed as integer
-        skbee spawn text display at ({_loc} ~ vector(0,-0.3*({_line}+{_l}-1),0)++vector(0,0.3,0))
-        set {_d} to last spawned entity
-        set display billboard of {_d} to center
-        set display component of {_d} to getComponentFromText({_lines::%loop-value%})
-        set string tag "custom;id" of nbt of {_d} to {_id}
-        set byte tag "custom;super" of nbt of {_d} to 1
-        set int tag "custom;line" of nbt of {_d} to {_line}+{_l}-1
-        set {displays::supers::%{_id}%::lines::%{_line}+{_l}-1%::text} to "%{_lines::%loop-value%}%"
-        set {displays::supers::%{_id}%::lines::%{_line}+{_l}-1%::entity} to uuid of {_d}
-    set {_locs::*} to killSubs({_id})
-    loop {_locs::*}:
-        createSub(loop-value, {_id})
+	set {_loc} to {_p}'s eyes if (doesDisplayExist({_id}) is false) else (location of ({displays::supers::%{_id}%::lines::1::entity} parsed as entity))
+	set {_lines::*} to "%{_text::*}%" split at "||"
+	loop (indexes of {_lines::*}):
+		set {_loop-value} to loop-value
+		set {_l} to (loop-value parsed as integer)
+		spawn text display at ({_loc} ~ (vector(0,(-0.3*({_line}+{_l}-1)),0)++vector(0,0.3,0))):
+			set (display billboard of entity) to center
+			set (display component of entity) to getComponentFromText({_lines::%{_loop-value}%})
+			set (string tag "custom;id" of (nbt of entity)) to {_id}
+			set (byte tag "custom;super" of (nbt of entity)) to 1
+			set (int tag "custom;line" of (nbt of entity)) to {_line}+{_l}-1
+			set {displays::supers::%{_id}%::lines::%{_line}+{_l}-1%::text} to "%{_lines::%{_loop-value}%}%"
+			set {displays::supers::%{_id}%::lines::%{_line}+{_l}-1%::entity} to (uuid of entity)
+	loop killSubs({_id}):
+		createSub(loop-value, {_id})
 
 function createSub(l: location, id: text):
-    loop indexes of {displays::supers::%{_id}%::lines::*} in ascending order:
-        set {_super} to getSuper({_id}, (loop-value parsed as integer))
-        skbee spawn text display at ({_l} ~ vector(0,(-0.3*(loop-value parsed as integer)),0)++vector(0,0.3,0))
-        set {_d} to last spawned entity
-        set display billboard of {_d} to center
-        set display component of {_d} to display component of {_super}
-        set string tag "custom;id" of nbt of {_d} to {_id}
-        set byte tag "custom;sub" of nbt of {_d} to 1
-        set int tag "custom;line" of nbt of {_d} to (loop-value parsed as integer)
-        set uuid tag "custom;super" of nbt of {_d} to getSuper({_id}, (loop-value parsed as integer))
-        add uuid of {_d} to {displays::subs::%{_id}%::lines::%loop-value%::*}
+	loop (indexes of {displays::supers::%{_id}%::lines::*} in ascending order):
+		set {_loop-value} to loop-value
+		set {_i} to (loop-value parsed as integer)
+		set {_super} to getSuper({_id}, {_i})
+		spawn text display at ({_l} ~ vector(0,(-0.3*{_i}),0)++vector(0,0.3,0)):
+			set (display billboard of entity) to center
+			set (display component of entity) to (display component of {_super})
+			set (string tag "custom;id" of (nbt of entity)) to {_id}
+			set (byte tag "custom;sub" of (nbt of entity)) to 1
+			set (int tag "custom;line" of (nbt of entity)) to {_i}
+			set (uuid tag "custom;super" of (nbt of entity)) to getSuper({_id}, {_i})
+			add (uuid of entity) to {displays::subs::%{_id}%::lines::%{_loop-value}%::*}
 
 function createDisplay(p: player, id: text, text: strings):
-    if doesDisplayExist({_id}) is true:
-        send "{@pb} &cA text display with that ID already exists. Use &b/textdisplay copy <id>&c to create a copy." to {_p}
-    else:
-        createSuper({_p}, {_id}, 1, {_text::*})
-        send "{@pb} &aCreated text display with id &b%{_id}%&a." to {_p}
+	if doesDisplayExist({_id}) is true:
+		send "{@pb} &cA text display with that ID already exists. Use &b/textdisplay copy <id>&c to create a copy." to {_p}
+	else:
+		createSuper({_p}, {_id}, 1, {_text::*})
+		send "{@pb} &aCreated text display with id &b%{_id}%&a." to {_p}
 
 function setLine(p: player, id: text, text: strings):
-    if doesDisplayExist({_id}) is true:
-        set {_line::*} to "%{_text::*}%" parsed as "%integer% %text%"
-        if indexes of {displays::supers::%{_id}%::lines::*} contains "%{_line::1}%":
-            set {displays::supers::%{_id}%::lines::%{_line::1}%::text} to {_line::2}
-            set display component of getSuper({_id}, {_line::1}) to getComponentFromText({_line::2})
-        set {_locs::*} to killSubs({_id})
-        loop {_locs::*}:
-            createSub(loop-value, {_id})
-    else:
-        send "{@pb} &cCouldn't find a text display with ID '%{_id}%'." to {_p}
+	if doesDisplayExist({_id}) is true:
+		set {_line::*} to ("%{_text::*}%" parsed as "%integer% %text%")
+		if (indexes of {displays::supers::%{_id}%::lines::*}) contains "%{_line::1}%":
+			set {displays::supers::%{_id}%::lines::%{_line::1}%::text} to {_line::2}
+			set (display component of getSuper({_id}, {_line::1})) to getComponentFromText({_line::2})
+		loop killSubs({_id}):
+			createSub(loop-value, {_id})
+	else:
+		send "{@pb} &cCouldn't find a text display with ID '%{_id}%'." to {_p}
 
 function killSubs(id: text) :: locations:
-    loop indexes of {displays::subs::%{_id}%::lines::*}:
-        loop {displays::subs::%{_id}%::lines::%loop-value%::*}:
-            add (location of (loop-value-2 parsed as entity)) to {_locs::*} if (loop-value-1 is "1")
-            kill (loop-value-2 parsed as entity)
-    clear {displays::subs::%{_id}%::*}
-    delete {displays::subs::%{_id}%}
-    return {_locs::*}
+	loop (indexes of {displays::subs::%{_id}%::lines::*}):
+		loop {displays::subs::%{_id}%::lines::%loop-value%::*}:
+			set {_e} to (loop-value-2 parsed as entity)
+			add (location of {_e}) to {_locs::*} if (loop-value-1 is "1")
+			kill {_e}
+	clear {displays::subs::%{_id}%::*}
+	delete {displays::subs::%{_id}%}
+	return {_locs::*}
 
 function removeDisplay(p: player, id: text):
-    if doesDisplayExist({_id}) is true:
-        killSubs({_id})
-        loop indexes of {displays::supers::%{_id}%::lines::*}:
-            kill ({displays::supers::%{_id}%::lines::%loop-value%::entity} parsed as entity)
-        clear {displays::supers::%{_id}%::*}
-        delete {displays::supers::%{_id}%}
-        send "{@pb} &aRemoved display (and all it's copies) with ID '%{_id}%'." to {_p}
-    else:
-        send "{@pb} &cCouldn't find a text display with ID '%{_id}%'." to {_p}
+	if doesDisplayExist({_id}) is true:
+		killSubs({_id})
+		loop (indexes of {displays::supers::%{_id}%::lines::*}):
+			kill ({displays::supers::%{_id}%::lines::%loop-value%::entity} parsed as entity)
+		clear {displays::supers::%{_id}%::*}
+		delete {displays::supers::%{_id}%}
+		send "{@pb} &aRemoved display (and all it's copies) with ID '%{_id}%'." to {_p}
+	else:
+		send "{@pb} &cCouldn't find a text display with ID '%{_id}%'." to {_p}
 
 function listDisplays(p: player):
-    if size of indexes of {displays::supers::*} >= 1:
-        send "" to {_p}
-        send component (text component of "&aRegistered text displays (%size of indexes of {displays::supers::*}%):") to {_p}
-        loop indexes of {displays::supers::*}:
-            set {_c} to text component from " &7- &b%loop-value% (%size of {displays::subs::%loop-value%::lines::1::*}%)"
-            clear {_t::*}
-            add "&bClick to autofill remove command.", "Lines:" to {_t::*}
-            loop indexes of {displays::supers::%loop-value%::lines::*}:
-                add (merge components (text component from "&7%loop-value-2%. ") and getComponentFromText({displays::supers::%loop-value-1%::lines::%loop-value-2%::text})) to {_t::*}
-            set hover event of {_c} to hover event showing {_t::*}
-            set click event of {_c} to click event to suggest command "/textdisplay remove %loop-value%"
-            send component {_c} to {_p}
-        send "" to {_p}
-    else:
-        send "{@pb} &cCouldn't find any text displays to list." to {_p}
+	if (size of (indexes of {displays::supers::*})) >= 1:
+		send "" to {_p}
+		send component (text component of "&aRegistered text displays (%size of indexes of {displays::supers::*}%):") to {_p}
+		loop (indexes of {displays::supers::*}):
+			clear {_t::*}
+			set {_c} to (text component from " &7- &b%loop-value% (%size of {displays::subs::%loop-value%::lines::1::*}%)")
+			add "&bClick to autofill remove command.", "Lines:" to {_t::*}
+			loop (indexes of {displays::supers::%loop-value%::lines::*}):
+				add (merge components (text component from "&7%loop-value-2%. ") and getComponentFromText({displays::supers::%loop-value-1%::lines::%loop-value-2%::text})) to {_t::*}
+			set (hover event of {_c}) to (hover event showing {_t::*})
+			set (click event of {_c}) to (click event to suggest command "/textdisplay remove %loop-value%")
+			send component {_c} to {_p}
+		send "" to {_p}
+	else:
+		send "{@pb} &cCouldn't find any text displays to list." to {_p}
 
 on entity remove from world:
-    if nbt of event-entity has tag "custom;super":
-        if nbt of event-entity does not have tag "custom;sub":
-            set {_id} to string tag "custom;id" of nbt of event-entity
-            killSubs({_id})
+	if all:
+		(nbt of event-entity) has tag "custom;super"
+		(nbt of event-entity) does not have tag "custom;sub"
+	then:
+		set {_id} to (string tag "custom;id" of (nbt of event-entity))
+		killSubs({_id})
 
 on tab complete of "/textdisplay":
-    set tab completions for position 1 to ("create", "copy", "remove", "addline", "setline", "list")
-    if tab arg-1 is "create":
-        set tab completions for position 2 to "<id>"
-        set tab completions for position 3 to "[<text>]"
-    else if tab arg-1 is "copy", "remove", "addline" or "setline":
-        if tab arg-1 is "setline":
-            set tab completions for position 3 to indexes of {displays::supers::%tab arg-2%::lines::*}
-            set tab completions for position 4 to "[<text>]"
-        else if tab arg-1 is "addline":
-            set tab completions for position 3 to "[<text>]"
-        set tab completions for position 2 to indexes of {displays::supers::*}
+	set (tab completions for position 1) to ("create", "copy", "remove", "addline", "setline", "list")
+	if tab arg-1 is "create":
+		set (tab completions for position 2) to "<id>"
+		set (tab completions for position 3) to "[<text>]"
+	else if tab arg-1 is "copy", "remove", "addline" or "setline":
+		if tab arg-1 is "setline":
+			set (tab completions for position 3) to (indexes of {displays::supers::%tab arg-2%::lines::*})
+			set (tab completions for position 4) to "[<text>]"
+		else if tab arg-1 is "addline":
+			set (tab completions for position 3) to "[<text>]"
+		set (tab completions for position 2) to (indexes of {displays::supers::*})
 
 command /textdisplay [<text>] [<text>] [<strings>]:
-    aliases: /textdisplays
-    trigger:
-        if arg-1 is not set:
-            send "&aSimple Text Displays by cheezburga"
-        else:
-            if arg-1 is "create" or "make":
-                if arg-2 is set:
-                    createDisplay(player, (unformatted arg-2), (arg-3))
-                else:
-                    send "{@pb} &cProvide an ID for the display to be created."
-            else if arg-1 is "copy" or "duplicate":
-                if arg-2 is set:
-                    if doesDisplayExist((unformatted arg-2)) is true:
-                        createSub(player's eyes, (unformatted arg-2))
-                    else:
-                        send "{@pb} &cCouldn't find a text display with ID '%(unformatted arg-2)%'."
-                else:
-                    send "{@pb} &cProvide an ID for the display to be copied."
-            else if arg-1 is "remove" or "delete":
-                if arg-2 is set:
-                    removeDisplay(player, (unformatted arg-2))
-                else:
-                    send "{@pb} &cProvide an ID for the display to be removed."
-            else if arg-1 is "addline":
-                if arg-2 is set:
-                    if doesDisplayExist((unformatted arg-2)) is true:
-                        createSuper(player, (unformatted arg-2), (size of indexes of {displays::supers::%unformatted arg-2%::lines::*}) + 1, (arg-3))
-                    else:
-                        send "{@pb} &cCouldn't find a text display with ID '%(unformatted arg-2)%'."
-                else:
-                    send "{@pb} &cProvide an ID for the display to have a line added."
-            else if arg-1 is "setline":
-                if arg-2 is set:
-                    setLine(player, (unformatted arg-2), (arg-3))
-                else:
-                    send "{@pb} &cProvide an ID for the display to have a line set."
-            else if arg-1 is "list":
-                listDisplays(player)
-            else:
-                send "{@pb} &c%arg-1% is not a valid argument."
+	aliases: /textdisplays
+	trigger:
+		if arg-1 is not set:
+			send "&aSimple Text Displays by cheezburga"
+		else:
+			if arg-1 is "create" or "make":
+				if arg-2 is set:
+					createDisplay(player, (unformatted arg-2), (arg-3))
+				else:
+					send "{@pb} &cProvide an ID for the display to be created."
+			else if arg-1 is "copy" or "duplicate":
+				if arg-2 is set:
+					if doesDisplayExist((unformatted arg-2)) is true:
+						createSub(player's eyes, (unformatted arg-2))
+					else:
+						send "{@pb} &cCouldn't find a text display with ID '%(unformatted arg-2)%'."
+				else:
+					send "{@pb} &cProvide an ID for the display to be copied."
+			else if arg-1 is "remove" or "delete":
+				if arg-2 is set:
+					removeDisplay(player, (unformatted arg-2))
+				else:
+					send "{@pb} &cProvide an ID for the display to be removed."
+			else if arg-1 is "addline":
+				if arg-2 is set:
+					if doesDisplayExist((unformatted arg-2)) is true:
+						createSuper(player, (unformatted arg-2), (size of indexes of {displays::supers::%unformatted arg-2%::lines::*}) + 1, (arg-3))
+					else:
+						send "{@pb} &cCouldn't find a text display with ID '%(unformatted arg-2)%'."
+				else:
+					send "{@pb} &cProvide an ID for the display to have a line added."
+			else if arg-1 is "setline":
+				if arg-2 is set:
+					setLine(player, (unformatted arg-2), (arg-3))
+				else:
+					send "{@pb} &cProvide an ID for the display to have a line set."
+			else if arg-1 is "list":
+				listDisplays(player)
+			else:
+				send "{@pb} &c%arg-1% is not a valid argument."
