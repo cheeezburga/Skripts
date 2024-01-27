@@ -1,0 +1,241 @@
+options:
+	secretKey: "YOUR_SECRET_KEY_HERE"
+
+import:
+	java.lang.String
+	java.net.URI
+	java.net.http.HttpClient
+	java.net.http.HttpRequest
+	java.net.http.HttpResponse$BodyHandlers
+	java.net.http.HttpHeaders
+	com.google.gson.Gson
+	com.google.gson.JsonParser
+	ch.njol.skript.classes.Changer$ChangerUtils
+	ch.njol.skript.classes.Changer$ChangeMode
+	ch.njol.skript.Skript
+	com.btk5h.skriptmirror.ObjectWrapper
+
+# should there be so many effects? or put them all in one and send a request based on other stuff
+
+on load:
+	set {tebex::url} to "https://plugin.tebex.io/rpc/"
+	set {tebex::client} to HttpClient.newHttpClient()
+	set {tebex::wrapperArrayClass} to class of new ObjectWrapper[0]
+
+# -------- CONDITION -------- #
+# ------- From Pikachu ------ #
+
+condition %object% can be (:set) to %javatype%:
+	check:
+		set {_mode} to uppercase first element out of parse tags
+		set {_acceptable types::*} to ...expr-1.acceptChange(ChangeMode..{_mode})
+		set {_multiple required} to expr-2.class.isArray()
+		set {_target type} to expr-2.class.getComponentType() if {_multiple required} is true otherwise expr-2.class
+		loop {_acceptable types::*}:
+			if loop-value.isArray():
+				if loop-value.getComponentType().isAssignableFrom({_target type}):
+					continue
+			else if:
+				{_multiple required} is false
+				loop-value.isAssignableFrom({_target type})
+			then:
+				continue
+
+# -------- EXPRESSION -------- #
+
+expression [the] [last[ly]] [loaded] tebex result:
+	get:
+		return {tebex::lastResult::*}
+	set:
+		set {tebex::lastResult::*} to change values
+	delete:
+		clear {tebex::lastResult::*}
+	reset:
+		clear {tebex::lastResult::*}
+
+# -------- INFORMATION -------- #
+
+effect load tebex info[rmation] [(to|into|and store it in) %-objects%]:
+	parse:
+		set {_storedIn} to expr-1
+		if any:
+			{_storedIn} is not set
+			{_storedIn} can be set to class of Gson
+		then:
+			continue
+		else:
+			Skript.error("%expr-1% cannot accept a GSON object.")
+	trigger:
+		delay the effect
+		set {_json} to "{""method"":""GET"",""params"":{""SecretKey"":""{@secretKey}"",""Path"":""/information""}}"
+		set {_request} to HttpRequest.newBuilder().uri(URI.create({tebex::url})).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString({_json})).build()
+		set {_futureResponse} to {tebex::client}.sendAsync({_request}, BodyHandlers.ofString())
+		await {_futureResponse}.join()
+		set {_response} to {_futureResponse}.get() # responds with status code 200 (good)
+		set {_body} to {_response}.body()
+		set {_result} to new JsonParser().parse({_body})
+		if (the raw expr-1) is set:
+			set (the raw expr-1) to {_result} # might be subject to change, coz this is ridiculous
+			# (the raw expr-1).change(event, {_result}, Changer.ChangeMode.SET) # this doesnt work because the 2nd parameter needs to be an array
+		else:
+			set tebex result to {_result}
+		continue
+
+# -------- PACKAGES -------- #
+
+effect load [all] tebex packages [verbose:(with|including) descriptions] [(to|into|and store them in) %-objects%]:
+	parse:
+		set {_storedIn} to expr-1
+		if any:
+			{_storedIn} is not set
+			{_storedIn} can be set to {tebex::wrapperArrayClass}
+		then:
+			continue
+		else:
+			Skript.error("%expr-1% cannot accept multiple GSON objects.")
+	trigger:
+		delay the effect
+		set {_verbosity} to true if (parse tags contains "verbose") else false # if true, get descriptions as well
+		# verbosity doesnt seem to change the response
+		set {_json} to "{""method"":""GET"",""params"":{""SecretKey"":""{@secretKey}"",""Path"":""/packages"",""Query"":{""verbose"":%{_verbosity}%}}}"
+		set {_request} to HttpRequest.newBuilder().uri(URI.create({tebex::url})).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString({_json})).build()
+		set {_futureResponse} to {tebex::client}.sendAsync({_request}, BodyHandlers.ofString())
+		await {_futureResponse}.join()
+		set {_response} to {_futureResponse}.get() # responds with 200 (good)
+		set {_body} to {_response}.body()
+		set {_result} to new JsonParser().parse({_body}) # this needs to be spread
+		if (the raw expr-1) is set:
+			set (the raw expr-1) to ...{_result}
+		else:
+			set tebex result to ...{_result}
+		continue
+
+effect load tebex package [(with|from) id] %integer% [(to|into|and store them in) %-object%]:
+	parse:
+		set {_storedIn} to expr-2
+		if any:
+			{_storedIn} is not set
+			{_storedIn} can be set to class of Gson
+		then:
+			continue
+		else:
+			Skript.error("%expr-2% cannot accept a GSON object.")
+	trigger:
+		delay the effect
+		set {_json} to "{""method"":""GET"",""params"":{""SecretKey"":""{@secretKey}"",""Path"":""/package/%expr-1%""}}"
+		set {_request} to HttpRequest.newBuilder().uri(URI.create({tebex::url})).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString({_json})).build()
+		set {_futureResponse} to {tebex::client}.sendAsync({_request}, BodyHandlers.ofString())
+		await {_futureResponse}.join()
+		set {_response} to {_futureResponse}.get() # responds with 200 (good)
+		set {_body} to {_response}.body()
+		set {_result} to new JsonParser().parse({_body})
+		if (the raw expr-2) is set:
+			set (the raw expr-2) to {_result}
+		else:
+			set tebex result to {_result}
+		continue
+
+effect update tebex package [with id] %integer% [to [be] :(disabled|enabled)] [name:with name %-string%] [price:with price %-integer%]:
+	parse:
+		if any:
+			expr-2 is set
+			expr-3 is set
+			parse tags contain "disabled" or "enabled"
+		then:
+			continue
+		else:
+			Skript.error("Cannot update a Tebex package with no values.")
+	trigger:
+		delay the effect
+		set {_disabled} to """disabled"":true" if (parse tags contains "disabled")
+		set {_disabled} to """disabled"":false" if (parse tags contains "enabled")
+		set {_name} to """name"":""%expr-2%""" if (expr-2 is set)
+		set {_price} to """price"":%expr-3%" if (expr-3 is set)
+		set {_body} to join ({_disabled}, {_name}, {_price}) using ","
+		set {_json} to "{""method"":""PUT"",""params"":{""SecretKey"":""{@secretKey}"",""Path"":""/package/%expr-1%"",""Body"":{%{_body} ? ""%}}}"
+		set {_request} to HttpRequest.newBuilder().uri(URI.create({tebex::url})).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString({_json})).build()
+		set {_futureResponse} to {tebex::client}.sendAsync({_request}, BodyHandlers.ofString())
+		await {_futureResponse}.join()
+		set {_response} to {_futureResponse}.get() # responds with 500 (expected 204, but seems to correctly update?)
+		continue
+
+# -------- CHECKOUT -------- #
+
+effect load tebex check[ ]out link for %player% with package %integer% [(to|into|and store it in) %-object%]:
+	parse:
+		set {_storedIn} to expr-3
+		if any:
+			{_storedIn} is not set
+			{_storedIn} can be set to class of String
+		then:
+			continue
+		else:
+			Skript.error("%expr-3% cannot accept a String object.")
+	trigger:
+		delay the effect
+		set {_json} to "{""method"":""POST"",""params"":{""SecretKey"":""{@secretKey}"",""Path"":""/checkout"",""Body"":{""package_id"":""%expr-2%"",""username"":""%expr-1%""}}}" # this is sent to the rpc endpoint with a post request
+		set {_request} to HttpRequest.newBuilder().uri(URI.create({tebex::url})).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString({_json})).build()
+		set {_futureResponse} to {tebex::client}.sendAsync({_request}, BodyHandlers.ofString())
+		await {_futureResponse}.join()
+		set {_response} to {_futureResponse}.get() # responds with 200 (expects 201 i think, but seems to work). responds with 400 if expr-1 is changed to offline player and an offline player is provided
+		set {_body} to {_response}.body()
+		set {_result} to new JsonParser().parse({_response}.body()).get("url").getAsString()
+		if (the raw expr-3) is set:
+			set (the raw expr-3) to {_result}
+		else:
+			set tebex result to {_result}
+		continue
+
+# -------- LISTING -------- #
+
+effect load tebex listing[s] [(to|into|and store it in) %-object%]:
+	parse:
+		set {_storedIn} to expr-1
+		if any:
+			{_storedIn} is not set
+			{_storedIn} can be set to class of Gson
+		then:
+			continue
+		else:
+			Skript.error("%expr-1% cannot accept a GSON object.")
+	trigger:
+		delay the effect
+		set {_json} to "{""method"":""GET"",""params"":{""SecretKey"":""{@secretKey}"",""Path"":""/listing""}}"
+		set {_request} to HttpRequest.newBuilder().uri(URI.create({tebex::url})).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString({_json})).build()
+		set {_futureResponse} to {tebex::client}.sendAsync({_request}, BodyHandlers.ofString())
+		await {_futureResponse}.join()
+		set {_response} to {_futureResponse}.get() # responds with status code 200 (good)
+		set {_body} to {_response}.body()
+		set {_result} to new JsonParser().parse({_body})
+		if (the raw expr-1) is set:
+			set (the raw expr-1) to {_result}
+		else:
+			set tebex result to {_result}
+		continue
+
+# -------- SALES -------- #
+
+effect load tebex sales [(to|into|and store it in) %-object%]:
+	parse:
+		set {_storedIn} to expr-1
+		if any:
+			{_storedIn} is not set
+			{_storedIn} can be set to {tebex::wrapperArrayClass}
+		then:
+			continue
+		else:
+			Skript.error("%expr-1% cannot accept multiple GSON objects.")
+	trigger:
+		delay the effect
+		set {_json} to "{""method"":""GET"",""params"":{""SecretKey"":""{@secretKey}"",""Path"":""/sales""}}"
+		set {_request} to HttpRequest.newBuilder().uri(URI.create({tebex::url})).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString({_json})).build()
+		set {_futureResponse} to {tebex::client}.sendAsync({_request}, BodyHandlers.ofString())
+		await {_futureResponse}.join()
+		set {_response} to {_futureResponse}.get() # responds with status code 200 (good)
+		set {_body} to {_response}.body()
+		set {_result} to new JsonParser().parse({_body}) # this needs to be spread
+		if (the raw expr-1) is set:
+			set (the raw expr-1) to ...{_result}
+		else:
+			set tebex result to ...{_result}
+		continue
