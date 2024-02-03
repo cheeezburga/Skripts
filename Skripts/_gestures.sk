@@ -1,6 +1,10 @@
 options:
+	# script options
 	pb: &7[&b&lGestures&7]
 	regex: (?:(up|down|left|right)\s+)+
+
+	# how close the player has to be to a point (up/down/left/right) when gesturing for the script to detect a motion
+	leeway: 0.5
 
 	# permission option
 	gestures-admin-permission: gestures.admin
@@ -82,10 +86,10 @@ on sneak toggle:
 					if shouldShowParticles(player) is true:
 						draw 1 electric_spark at ({__center}, {__up}, {__down}, {__left}, {__right}) with offset vector(0, 0, 0) with extra 0 to player
 					#send action bar "Left: %distance between {_current} and {__left}% Right: %distance between {_current} and {__right}% Up: %distance between {_current} and {__up}% Down: %distance between {_current} and {__down}%" to player
-					set {_select} to "Right" if (distance between {_current} and {__right}) < 0.4
-					set {_select} to "Left" if (distance between {_current} and {__left}) < 0.4
-					set {_select} to "Down" if (distance between {_current} and {__down}) < 0.4
-					set {_select} to "Up" if (distance between {_current} and {__up}) < 0.4
+					set {_select} to "Right" if (distance between {_current} and {__right}) < {@leeway}
+					set {_select} to "Left" if (distance between {_current} and {__left}) < {@leeway}
+					set {_select} to "Down" if (distance between {_current} and {__down}) < {@leeway}
+					set {_select} to "Up" if (distance between {_current} and {__up}) < {@leeway}
 					if {_select} is not {_last}:
 						add {_select} to {_gestures::*}
 						set {_last} to {_select}
