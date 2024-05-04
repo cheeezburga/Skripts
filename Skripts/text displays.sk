@@ -1,6 +1,9 @@
 options:
 	pb: &7[&b&lText Displays&7]
 
+# potentially have a skript-gui thing for the options of the displays
+# this should use a parse if section so they dont get errors if skript-gui isnt enabled
+
 function doesDisplayExist(id: text) :: boolean:
 	if indexes of {displays::supers::*} contains {_id}:
 		return true
@@ -9,55 +12,132 @@ function doesDisplayExist(id: text) :: boolean:
 function getSuper(id: text, line: int) :: entity:
 	return ({displays::supers::%{_id}%::lines::%{_line}%::entity} parsed as entity)
 
-function getComponentFromText(text: strings) :: text component:
+function getSupers(id: text) :: entities:
+	loop (indexes of {displays::supers::%{_id}%::lines::*}):
+		set {_e::%loop-value%} to getSuper({_id}, (loop-value parsed as integer))
+	return {_e::*}
+
+function getBillboardOfSuper(id: text) :: display billboard:
+	return (display billboard of getSuper({_id}, 1)) ? center
+
+function getColorOfSuper(id: text) :: string:
+	return (string tag "custom;color" of (nbt of getSuper({_id}, 1))) ? "black"
+
+function getBukkitColorFromColor(color: string, alpha: int) :: bukkitColor:
+	set {_color} to ({_color} parsed as color)
+	if {_color} is not set:
+		return bukkitColor(0,0,0,0)
+	return {_color}.asBukkitColor().setAlpha({_alpha})
+
+function getAlphaOfSuper(id: text) :: integer:
+	return (int tag "custom;alpha" of (nbt of getSuper({_id}, 1))) ? 64
+
+function getComponentFromString(text: strings) :: text component:
 	return (text component of "%{_text::*}%") if ("%{_text::*}%" contains "&") else (mini message from "%{_text::*}%")
 
 function createSuper(p: player, id: text, line: int, text: strings):
-	set {_loc} to {_p}'s eyes if (doesDisplayExist({_id}) is false) else (location of ({displays::supers::%{_id}%::lines::1::entity} parsed as entity))
+	set {_loc} to {_p}'s eyes if (doesDisplayExist({_id}) is false) else (location of getSuper({_id}, 1))
 	set {_lines::*} to "%{_text::*}%" split at "||"
-	loop (indexes of {_lines::*}):
-		set {_loop-value} to loop-value
-		set {_l} to (loop-value parsed as integer)
-		spawn text display at ({_loc} ~ (vector(0,(-0.3*({_line}+{_l}-1)),0)++vector(0,0.3,0))):
-			set (display billboard of entity) to center
-			set (display component of entity) to getComponentFromText({_lines::%{_loop-value}%})
+	loop {_lines::*}:
+		set {_lv} to loop-value
+		set {_lc} to loop-counter
+		set {_ll} to {_line} + {_lc} - 1 # loop-line
+		spawn text display at {_loc} ~ vector(0, (-0.3 * {_ll} + 0.3), 0):
+
+			# init stuff
+			set (display component of entity) to getComponentFromString({_lv})
 			set (string tag "custom;id" of (nbt of entity)) to {_id}
 			set (byte tag "custom;super" of (nbt of entity)) to 1
-			set (int tag "custom;line" of (nbt of entity)) to {_line}+{_l}-1
-			set {displays::supers::%{_id}%::lines::%{_line}+{_l}-1%::text} to "%{_lines::%{_loop-value}%}%"
-			set {displays::supers::%{_id}%::lines::%{_line}+{_l}-1%::entity} to (uuid of entity)
+			set (int tag "custom;line" of (nbt of entity)) to {_ll}
+
+			# properties of display
+			set (display billboard of entity) to getBillboardOfSuper({_id})
+			set (default background of entity) to false
+			set {_color} to getColorOfSuper({_id})
+			set {_alpha} to getAlphaOfSuper({_id})
+			set (string tag "custom;color" of (nbt of entity)) to {_color}
+			set (int tag "custom;alpha" of (nbt of entity)) to {_alpha}
+			if doesDisplayExist({_id}) is true:
+				set (display text background color of entity) to getBukkitColorFromColor({_color}, {_alpha})
+
+			# variable stuff
+			set {displays::supers::%{_id}%::lines::%{_ll}%::text} to "%{_lv}%"
+			set {displays::supers::%{_id}%::lines::%{_ll}%::entity} to (uuid of entity)
+
+	# kill and recreate sub displays
 	loop killSubs({_id}):
 		createSub(loop-value, {_id})
 
-function createSub(l: location, id: text):
-	loop (indexes of {displays::supers::%{_id}%::lines::*} in ascending order):
-		set {_loop-value} to loop-value
-		set {_i} to (loop-value parsed as integer)
-		set {_super} to getSuper({_id}, {_i})
-		spawn text display at ({_l} ~ vector(0,(-0.3*{_i}),0)++vector(0,0.3,0)):
-			set (display billboard of entity) to center
+function createSub(loc: location, id: text):
+	loop indexes of {displays::supers::%{_id}%::lines::*}:
+		set {_lc} to loop-counter # using this might break stuff, if the lines arent in order, etc. should be fine i reckon?
+		set {_super} to getSuper({_id}, {_lc})
+		spawn text display at {_loc} ~ vector(0,(-0.3 * {_lc} + 0.3),0):
+			
+			# init stuff
 			set (display component of entity) to (display component of {_super})
 			set (string tag "custom;id" of (nbt of entity)) to {_id}
 			set (byte tag "custom;sub" of (nbt of entity)) to 1
-			set (int tag "custom;line" of (nbt of entity)) to {_i}
-			set (uuid tag "custom;super" of (nbt of entity)) to getSuper({_id}, {_i})
-			add (uuid of entity) to {displays::subs::%{_id}%::lines::%{_loop-value}%::*}
+			set (int tag "custom;line" of (nbt of entity)) to {_lc}
+			set (uuid tag "custom;super" of (nbt of entity)) to {_super}
 
-function createDisplay(p: player, id: text, text: strings):
+			# properties of display
+			set (display billboard of entity) to (display billboard of {_super})
+			set (default background of entity) to false
+			set {_color} to getBukkitColorFromColor(getColorOfSuper({_id}), getAlphaOfSuper({_id}))
+			set (display text background color of entity) to {_color}
+
+			# variable stuff
+			add (uuid of entity) to {displays::subs::%{_id}%::lines::%{_lc}%::*}
+
+function createDisplay(p: player, id: text, text: strings): # this needs to accept the properties as well, so they can be passed to createSuper
 	if doesDisplayExist({_id}) is true:
 		send "{@pb} &cA text display with that ID already exists. Use &b/textdisplay copy <id>&c to create a copy." to {_p}
 	else:
 		createSuper({_p}, {_id}, 1, {_text::*})
-		send "{@pb} &aCreated text display with id &b%{_id}%&a." to {_p}
+		send "{@pb} &aCreated text display with ID &b%{_id}%&a." to {_p}
 
 function setLine(p: player, id: text, text: strings):
 	if doesDisplayExist({_id}) is true:
 		set {_line::*} to ("%{_text::*}%" parsed as "%integer% %text%")
 		if (indexes of {displays::supers::%{_id}%::lines::*}) contains "%{_line::1}%":
 			set {displays::supers::%{_id}%::lines::%{_line::1}%::text} to {_line::2}
-			set (display component of getSuper({_id}, {_line::1})) to getComponentFromText({_line::2})
+			set (display component of getSuper({_id}, {_line::1})) to getComponentFromString({_line::2})
 		loop killSubs({_id}):
 			createSub(loop-value, {_id})
+	else:
+		send "{@pb} &cCouldn't find a text display with ID '%{_id}%'." to {_p}
+
+function modifyProperty(p: player, id: text, text: strings):
+	if doesDisplayExist({_id}) is true:
+		
+		set {_e::*} to getSupers({_id})
+
+		set {_text::*} to ({_text::1} split at " ")
+		set {_property} to {_text::1}
+
+		if {_property} is "billboard", "background" or "alpha":
+			loop {_e::*}:
+				if {_property} is "billboard":
+					set {_billboard} to ({_text::2} parsed as display billboard)
+					set (display billboard of loop-value) to {_billboard}
+					set {_changed} to true
+
+				else if {_property} is "background" or "alpha":
+					set {_changeTo} to {_text::2} if ({_property} is "background") else ({_text::2} parsed as integer)
+					if {_property} is "background":
+						set (string tag "custom;color" of (nbt of loop-value)) to {_changeTo}
+					else if {_property} is "alpha":
+						set (int tag "custom;alpha" of (nbt of loop-value)) to {_changeTo}
+					set (display text background color of loop-value) to getBukkitColorFromColor(getColorOfSuper({_id}), getAlphaOfSuper({_id}))
+					set {_changed} to true
+
+				else:
+					send "{@pb} &cCouldn't find a valid property." to {_p}
+		
+			if {_changed} is true:
+				loop killSubs({_id}):
+					createSub(loop-value, {_id})
 	else:
 		send "{@pb} &cCouldn't find a text display with ID '%{_id}%'." to {_p}
 
@@ -89,9 +169,10 @@ function listDisplays(p: player):
 		loop (indexes of {displays::supers::*}):
 			clear {_t::*}
 			set {_c} to (text component from " &7- &b%loop-value% (%size of {displays::subs::%loop-value%::lines::1::*}%)")
-			add "&bClick to autofill remove command.", "Lines:" to {_t::*}
+			add "&f&lLines:" to {_t::*}
 			loop (indexes of {displays::supers::%loop-value%::lines::*}):
-				add (merge components (text component from "&7%loop-value-2%. ") and getComponentFromText({displays::supers::%loop-value-1%::lines::%loop-value-2%::text})) to {_t::*}
+				add (merge components (text component from "&7%loop-value-2%. ") and getComponentFromString({displays::supers::%loop-value-1%::lines::%loop-value-2%::text})) to {_t::*}
+			add "", "&7Click to autofill remove command" to {_t::*}
 			set (hover event of {_c}) to (hover event showing {_t::*})
 			set (click event of {_c}) to (click event to suggest command "/textdisplay remove %loop-value%")
 			send component {_c} to {_p}
@@ -108,23 +189,31 @@ on entity remove from world:
 		killSubs({_id})
 
 on tab complete of "/textdisplay":
-	set (tab completions for position 1) to ("create", "copy", "remove", "addline", "setline", "list")
+	set (tab completions for position 1) to ("create", "copy", "remove", "addline", "setline", "properties", "list")
 	if tab arg-1 is "create":
 		set (tab completions for position 2) to "<id>"
 		set (tab completions for position 3) to "[<text>]"
-	else if tab arg-1 is "copy", "remove", "addline" or "setline":
+	else if tab arg-1 is "copy", "remove", "addline", "setline" or "properties":
+		set (tab completions for position 2) to (indexes of {displays::supers::*})
 		if tab arg-1 is "setline":
 			set (tab completions for position 3) to (indexes of {displays::supers::%tab arg-2%::lines::*})
 			set (tab completions for position 4) to "[<text>]"
 		else if tab arg-1 is "addline":
 			set (tab completions for position 3) to "[<text>]"
-		set (tab completions for position 2) to (indexes of {displays::supers::*})
+		else if tab arg-1 is "properties":
+			set (tab completions for position 3) to "billboard", "background", "alpha"
+			if tab arg-3 is "billboard":
+				set (tab completions for position 4) to all display billboards
+			else if tab arg-3 is "background":
+				set (tab completions for position 4) to all colors, "clear" and "none"
+			else if tab arg-3 is "alpha":
+				set (tab completions for position 4) to "<0-255>"
 
 command /textdisplay [<text>] [<text>] [<strings>]:
 	aliases: /textdisplays
 	trigger:
 		if arg-1 is not set:
-			send "&aSimple Text Displays by cheezburga"
+			send "&aBetter Text Displays by cheezburga"
 		else:
 			if arg-1 is "create" or "make":
 				if arg-2 is set:
@@ -157,6 +246,11 @@ command /textdisplay [<text>] [<text>] [<strings>]:
 					setLine(player, (unformatted arg-2), (arg-3))
 				else:
 					send "{@pb} &cProvide an ID for the display to have a line set."
+			else if arg-1 is "properties":
+				if arg-2 is set:
+					modifyProperty(player, (unformatted arg-2), (arg-3))
+				else:
+					send "{@pb} &cProvide an ID for the display to modify a property."
 			else if arg-1 is "list":
 				listDisplays(player)
 			else:
