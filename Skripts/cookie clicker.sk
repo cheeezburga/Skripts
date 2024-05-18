@@ -1,104 +1,364 @@
-#cookie clicker - by cheezburga
+# cookie clicker - by cheezburga
+#
+# TODO: stats?
+# TODO: rollback? might be too intensive
+# TODO: load previous saves? probably shouldnt work if use-vault is true
+# TODO: add options? play sound every click, etc?
+
+import:
+	java.lang.String
+	java.lang.Long
+	java.lang.Integer
+	java.io.File
 
 options:
 	prefix: &f&l[&6&lCC&f&l]
 
-	#whether the skript will use vault as its cookie currency
+	# whether the script will add to player's money
 	use-vault: false
+
+function formatNumber(i: number) :: string:
+	if mod({_i}, 1) is 0:
+		return String.format("%%,d", new Long({_i}))
+	else:
+		return String.format("%%,.1f", {_i})
 
 on load:
 	send "{@prefix} &aLoading cookie data..." to console
-	set {buildings::*} to "cursor", "grandma", "farm", "mine", "factory", "bank", "temple", "wizardtower", "shipment", "alchemylab", "portal", "timemachine", "antimattercondenser", "prism", "chancemaker" and "fractalengine"
+	set {cc::buildings::*} to ("cursor", "grandma", "farm", "mine", "factory", "bank", "temple", "wizardtower", "shipment", "alchemylab", "portal", "timemachine", "antimattercondenser", "prism", "chancemaker", "fractalengine")
 	if nbt file "plugins/Skript/cookieclicker/buildings.dat" doesn't exist:
-		set {_file} to nbt compound of file "plugins/Skript/cookieclicker/buildings.dat"
-		set tag "cursor;price" of {_file} to 15
-		set tag "cursor;cps" of {_file} to 0.1
-		set tag "cursor;item" of {_file} to "iron sword"
-		set tag "cursor;name" of {_file} to "Cursor"
-		set tag "grandma;price" of {_file} to 100
-		set tag "grandma;cps" of {_file} to 1
-		set tag "grandma;item" of {_file} to "sugar"
-		set tag "grandma;name" of {_file} to "Grandma"
-		set tag "farm;price" of {_file} to 1100
-		set tag "farm;cps" of {_file} to 8
-		set tag "farm;item" of {_file} to "wheat"
-		set tag "farm;name" of {_file} to "Farm"
-		set tag "mine;price" of {_file} to 12000
-		set tag "mine;cps" of {_file} to 47
-		set tag "mine;item" of {_file} to "stone"
-		set tag "mine;name" of {_file} to "Mine"
-		set tag "factory;price" of {_file} to 130000
-		set tag "factory;cps" of {_file} to 260
-		set tag "factory;item" of {_file} to "iron bars"
-		set tag "factory;name" of {_file} to "Factory"
-		set tag "bank;price" of {_file} to 1400000
-		set tag "bank;cps" of {_file} to 1400
-		set tag "bank;item" of {_file} to "gold ingot"
-		set tag "bank;name" of {_file} to "Bank"
-		set tag "temple;price" of {_file} to 20000000
-		set tag "temple;cps" of {_file} to 7800
-		set tag "temple;item" of {_file} to "sandstone"
-		set tag "temple;name" of {_file} to "Temple"
-		set tag "wizardtower;price" of {_file} to 330000000
-		set tag "wizardtower;cps" of {_file} to 44000
-		set tag "wizardtower;item" of {_file} to "glass bottle"
-		set tag "wizardtower;name" of {_file} to "Wizard Tower"
-		set tag "shipment;price" of {_file} to 5100000000
-		set tag "shipment;cps" of {_file} to 260000
-		set tag "shipment;item" of {_file} to "oak boat"
-		set tag "shipment;name" of {_file} to "Shipment"
-		set tag "alchemylab;price" of {_file} to 75000000000
-		set tag "alchemylab;cps" of {_file} to 1600000
-		set tag "alchemylab;item" of {_file} to "gold nugget"
-		set tag "alchemylab;name" of {_file} to "Alchemy Lab"
-		set tag "portal;price" of {_file} to 1000000000000
-		set tag "portal;cps" of {_file} to 10000000
-		set tag "portal;item" of {_file} to "obsidian"
-		set tag "portal;name" of {_file} to "Portal"
-		set tag "timemachine;price" of {_file} to 14000000000000
-		set tag "timemachine;cps" of {_file} to 65000000
-		set tag "timemachine;item" of {_file} to "compass"
-		set tag "timemachine;name" of {_file} to "Time Machine"
-		set tag "antimattercondenser;price" of {_file} to 170000000000000
-		set tag "antimattercondenser;cps" of {_file} to 430000000
-		set tag "antimattercondenser;item" of {_file} to "gunpowder"
-		set tag "antimattercondenser;name" of {_file} to "Antimatter Condenser"
-		set tag "prism;price" of {_file} to 2100000000000000
-		set tag "prism;cps" of {_file} to 2900000000
-		set tag "prism;item" of {_file} to "glass block"
-		set tag "prism;name" of {_file} to "Prism"
-		set tag "chancemaker;price" of {_file} to 26000000000000000
-		set tag "chancemaker;cps" of {_file} to 21000000000
-		set tag "chancemaker;item" of {_file} to "glowstone dust"
-		set tag "chancemaker;name" of {_file} to "Chancemaker"
-		set tag "fractalengine;price" of {_file} to 310000000000000000
-		set tag "fractalengine;cps" of {_file} to 150000000000
-		set tag "fractalengine;item" of {_file} to "prismarine shard"
-		set tag "fractalengine;name" of {_file} to "Fractal Engine"
+		set {_file} to nbt from file "plugins/Skript/cookieclicker/buildings.dat"
+		set double tag "cursor;price" of {_file} to 15
+		set double tag "cursor;cps" of {_file} to 0.1
+		set string tag "cursor;item" of {_file} to "iron sword"
+		set string tag "cursor;name" of {_file} to "Cursor"
+		set double tag "grandma;price" of {_file} to 100
+		set double tag "grandma;cps" of {_file} to 1
+		set string tag "grandma;item" of {_file} to "sugar"
+		set string tag "grandma;name" of {_file} to "Grandma"
+		set double tag "farm;price" of {_file} to 1100
+		set double tag "farm;cps" of {_file} to 8
+		set string tag "farm;item" of {_file} to "wheat"
+		set string tag "farm;name" of {_file} to "Farm"
+		set double tag "mine;price" of {_file} to 12000
+		set double tag "mine;cps" of {_file} to 47
+		set string tag "mine;item" of {_file} to "stone"
+		set string tag "mine;name" of {_file} to "Mine"
+		set double tag "factory;price" of {_file} to 130000
+		set double tag "factory;cps" of {_file} to 260
+		set string tag "factory;item" of {_file} to "iron bars"
+		set string tag "factory;name" of {_file} to "Factory"
+		set double tag "bank;price" of {_file} to 1400000
+		set double tag "bank;cps" of {_file} to 1400
+		set string tag "bank;item" of {_file} to "gold ingot"
+		set string tag "bank;name" of {_file} to "Bank"
+		set double tag "temple;price" of {_file} to 20000000
+		set double tag "temple;cps" of {_file} to 7800
+		set string tag "temple;item" of {_file} to "sandstone"
+		set string tag "temple;name" of {_file} to "Temple"
+		set double tag "wizardtower;price" of {_file} to 330000000
+		set double tag "wizardtower;cps" of {_file} to 44000
+		set string tag "wizardtower;item" of {_file} to "glass bottle"
+		set string tag "wizardtower;name" of {_file} to "Wizard Tower"
+		set double tag "shipment;price" of {_file} to 5100000000
+		set double tag "shipment;cps" of {_file} to 260000
+		set string tag "shipment;item" of {_file} to "oak boat"
+		set string tag "shipment;name" of {_file} to "Shipment"
+		set double tag "alchemylab;price" of {_file} to 75000000000
+		set double tag "alchemylab;cps" of {_file} to 1600000
+		set string tag "alchemylab;item" of {_file} to "gold nugget"
+		set string tag "alchemylab;name" of {_file} to "Alchemy Lab"
+		set double tag "portal;price" of {_file} to 1000000000000
+		set double tag "portal;cps" of {_file} to 10000000
+		set string tag "portal;item" of {_file} to "obsidian"
+		set string tag "portal;name" of {_file} to "Portal"
+		set double tag "timemachine;price" of {_file} to 14000000000000
+		set double tag "timemachine;cps" of {_file} to 65000000
+		set string tag "timemachine;item" of {_file} to "compass"
+		set string tag "timemachine;name" of {_file} to "Time Machine"
+		set double tag "antimattercondenser;price" of {_file} to 170000000000000
+		set double tag "antimattercondenser;cps" of {_file} to 430000000
+		set string tag "antimattercondenser;item" of {_file} to "gunpowder"
+		set string tag "antimattercondenser;name" of {_file} to "Antimatter Condenser"
+		set double tag "prism;price" of {_file} to 2100000000000000
+		set double tag "prism;cps" of {_file} to 2900000000
+		set string tag "prism;item" of {_file} to "glass block"
+		set string tag "prism;name" of {_file} to "Prism"
+		set double tag "chancemaker;price" of {_file} to 26000000000000000
+		set double tag "chancemaker;cps" of {_file} to 21000000000
+		set string tag "chancemaker;item" of {_file} to "glowstone dust"
+		set string tag "chancemaker;name" of {_file} to "Chancemaker"
+		set double tag "fractalengine;price" of {_file} to 310000000000000000
+		set double tag "fractalengine;cps" of {_file} to 150000000000
+		set string tag "fractalengine;item" of {_file} to "prismarine shard"
+		set string tag "fractalengine;name" of {_file} to "Fractal Engine"
 		save nbt file of {_file}
+	set {cc::buildingsFile} to nbt from file "plugins/Skript/cookieclicker/buildings.dat"
+	set {cc::scoreboardMax} to ((size of {cc::buildings::*}) - 8)
 	send "{@prefix} &aLoaded cookie data." to console
 
-on tab complete of "/cc" or "/cookieclicker":
-	set tab completions for position 1 to "start", "shop", "reset", "delete", "scoreboard" and "stats"
-	if tab arg-1 is "start" or "shop" or "reset" or "delete" or "scoreboard":
-		set tab completions for position 2 to ""
-	else if tab arg-1 is "stats":
-		set tab completions for position 2 to all offline players where [isPlaying(input) is true]
+local function awardAFKCPS(p: player):
+	set {_lastLogOut} to {cc::lastLogOut::%uuid of {_p}%}
+	if {_lastLogOut} is set:
+		delete {cc::lastLogOut::%uuid of {_p}%}
+		set {_timeAway} to difference between now and {_lastLogOut}
+		set {_secondsAway} to seconds of {_timeAway}
+		set {_cps} to getCPSOfPlayer({_p})
+		set {_moneyMade} to ({_secondsAway} * {_cps})
+		addToTotal({_p}, {_moneyMade})
+		send "{@prefix} &aYou made &6$%formatNumber({_moneyMade})% &awhile you were away!" to {_p}
 
-function playerFile(p: offline player) :: text:
-	return "plugins/Skript/cookieclicker/players/%{_p}%.dat"
+on join:
+	if isPlaying(player) is true:
+		set {cc::scoreboard::%uuid of player%} to 1
+		set {cc::files::%uuid of player%} to nbt from file "plugins/Skript/cookieclicker/players/%uuid of player%.dat"
+		awardAFKCPS(player)
 
-function isPlaying(p: offline player) :: boolean:
-	set {_c} to true if nbt file playerFile({_p}) exists
-	set {_c} to false if nbt file playerFile({_p}) doesn't exist
-	if {_c} is true:
-		set {_c} to false if nbt compound of file playerFile({_p}) is empty nbt compound
-	return {_c}
+on quit:
+	if isPlaying(player) is true:
+		save nbt file of {cc::files::%uuid of player%}
+		delete {cc::files::%uuid of player%}
+		set {cc::lastLogOut::%uuid of player%} to now
+
+local function isPlaying(p: offline player) :: boolean:
+	return false if (nbt file "plugins/Skript/cookieclicker/players/%uuid of {_p}%.dat" doesn't exist)
+	return true
+
+local function getTotal(p: player) :: number:
+	set {_total} to (double tag "total" of {cc::files::%uuid of {_p}%})
+	parse if ({@use-vault} is true):
+		set {_total} to {_p}'s money
+	return floor({_total}) ? {_none}
+
+local function addToTotal(p: player, amount: number):
+	add {_amount} to (double tag "total" of {cc::files::%uuid of {_p}%})
+	parse if {@use-vault} is true:
+		add {_amount} to {_p}'s money
+	ccScoreboard({_p}, false)
+
+local function getAmountOfBuilding(p: player, building: string) :: integer:
+	set {_amount} to (int tag "buildings;%{_building}%" of {cc::files::%uuid of {_p}%})
+	return {_amount} ? 0
+
+local function getPriceOfBuilding(building: string) :: number:
+	set {_price} to (double tag "%{_building}%;price" of {cc::buildingsFile})
+	return {_price} ? {_none}
+
+local function getCPSOfBuilding(building: string) :: number:
+	set {_cps} to (double tag "%{_building}%;cps" of {cc::buildingsFile})
+	return {_cps} ? {_none}
+
+local function getItemOfBuilding(building: string) :: itemtype:
+	set {_item} to (string tag "%{_building}%;item" of {cc::buildingsFile})
+	return ({_item} parsed as itemtype) ? {_none}
+
+local function getNameOfBuilding(building: string) :: string:
+	set {_name} to (string tag "%{_building}%;name" of {cc::buildingsFile})
+	return {_name} ? {_none}
+
+local function getCPSOfPlayer(p: player) :: number:
+	loop {cc::buildings::*}:
+		set {_cps} to getCPSOfBuilding(loop-value)
+		set {_amount} to getAmountOfBuilding({_p}, loop-value)
+		add ({_cps} * {_amount}) to {_total}
+	return {_total}
+
+local function getNextPrice(p: player, building: string) :: number:
+	set {_amount} to getAmountOfBuilding({_p}, {_building})
+	set {_firstPrice} to getPriceOfBuilding({_building})
+	set {_nextPrice} to ceil({_firstPrice} * (1.15 ^ {_amount}))
+	return {_nextPrice} ? {_none}
+
+local function getCookieItem() :: item:
+	set {_i} to cookie named "&6&lCookie Clicker" with lore ("", "&7Right click to get cookies!")
+	set (byte tag "cc" of nbt of {_i}) to 1
+	return {_i}
+
+local function resetPlayerFile(p: player): # only works for online players
+	set (double tag "total" of {cc::files::%uuid of {_p}%}) to 0
+	loop {cc::buildings::*}:
+		set (int tag "buildings;%loop-value%" of {cc::files::%uuid of {_p}%}) to 0
+	save nbt file of {cc::files::%uuid of {_p}%}
+
+local function ccGive(p: player):
+	set {_cps} to getCPSOfPlayer({_p})
+	parse if {@use-vault} is true:
+		add {_cps} to {_p}'s money
+	addToTotal({_p}, {_cps})
+
+local function ccStart(p: player):
+	if isPlaying({_p}) is false:
+		send "{@prefix} &aCreating your player file..." to {_p}
+		set {cc::scoreboard::%uuid of {_p}%} to 1
+		set {cc::files::%uuid of {_p}%} to nbt from file "plugins/Skript/cookieclicker/players/%uuid of {_p}%.dat"
+		resetPlayerFile({_p})
+		send "{@prefix} &aCreated your player file." to {_p}
+		toggle {_p}'s scoreboard on
+		give or drop getCookieItem() to {_p}
+	else if isPlaying({_p}) is true:
+		send "{@prefix} &cYou're already playing, use '/cc reset' if you want to reset." to {_p}
+
+local function ccReset(p: player, promptForInput: boolean):
+	if isPlaying({_p}) is true:
+		if {_promptForInput} is true:
+			set (metadata tag "ccGetReset" of {_p}) to true
+			send "{@prefix} &aAre you sure you want to reset?" to {_p}
+			send "{@prefix} &aType 'yes' or 'no' in the chat:" to {_p}
+		else if {_promptForInput} is false:
+			resetPlayerFile({_p})
+			send "{@prefix} &aReset your cookie clicker account." to {_p}
+	else:
+		send "{@prefix} &cYou must be playing to reset your account." to {_p}
+
+local function ccDelete(p: player):
+	if isPlaying({_p}) is true:
+		reset {cc::files::%uuid of {_p}%}
+		set {_f} to new File("plugins/Skript/cookieclicker/players/%uuid of {_p}%.dat")
+		if {_f}.delete() is true:
+			toggle {_p}'s scoreboard off
+			send "{@prefix} &aDeleted your cookie clicker data." to {_p}
+		else:
+			send "{@prefix} &cRan into a problem deleting your data." to {_p}
+	else:
+		send "{@prefix} &cYou must be playing to delete your account." to {_p}
+
+local function getShopLore(p: player, building: string) :: strings:
+	set {_amount} to getAmountOfBuilding({_p}, {_building})
+	set {_cps} to getCPSOfBuilding({_building})
+	set {_totalCps} to ({_cps} * {_amount})
+	set {_nextPrice} to getNextPrice({_p}, {_building})
+	return ("&7Price: &6$%formatNumber({_nextPrice})%", "&7CPS: &f%formatNumber({_totalCps})% &7(&a+%formatNumber({_cps})%&7)", "&7You own &f%{_amount}%")
+
+local function ccShop(p: player):
+	if isPlaying({_p}) is true:
+		create gui with virtual chest inventory with 5 rows named "Cookie Shop":
+			format gui slot ((integers from 0 to 9),17,18,26,27,28,29,31,(integers from 33 to 44)) with black stained glass pane named "&0"
+			format gui slot 8 with black stained glass pane named "&0":
+				addToTotal({_p}, 1000000)
+			loop {cc::buildings::*}:
+				set {_building} to loop-value
+				format next gui slot with getItemOfBuilding({_building}) named "&f&l%getNameOfBuilding({_building})%" with lore getShopLore({_p}, ({_building})) with all item flags:
+					ccBuy({_p}, {_building})
+					set lore of gui item to getShopLore({_p}, {_building})
+			format gui slot 40 with barrier named "&c&lClose":
+				close {_p}'s inventory
+		open last gui to {_p}
+	else:
+		send "{@prefix} &cYou must be playing to use the &6/cc shop&c." to {_p}
+
+local function ccBuy(p: player, building: string):
+	set {_nextPrice} to getNextPrice({_p}, {_building})
+	parse if {@use-vault} is true:
+		set {_money} to {_p}'s money
+	else:
+		set {_money} to getTotal({_p})
+	if {_money} < {_nextPrice}:
+		send action bar "{@prefix} &cYou can't afford this building." to {_p}
+	else:
+		remove {_nextPrice} from (double tag "total" of {cc::files::%uuid of {_p}%})
+		parse if {@use-vault} is true:
+			remove {_nextPrice} from {_p}'s money
+		add 1 to (int tag "buildings;%{_building}%" of {cc::files::%uuid of {_p}%})
+		send action bar "{@prefix} &aBought a %getNameOfBuilding({_building}) in lower case%." to {_p}
+		play sound "entity.experience_orb.pickup" at volume 0.5 to {_p}
+		ccScoreboard({_p}, false)
+
+local function ccScoreboard(p: player, toggle: boolean):
+	if isPlaying({_p}) is true:
+		if {_toggle} is true:
+			toggle {_p}'s scoreboard
+		if scoreboard of {_p} is on:
+			set title of {_p}'s scoreboard to "    &6&lCookie Clicker    "
+			set line 15 of {_p}'s scoreboard to ""
+			set line 14 of {_p}'s scoreboard to "&6&lCookies"
+			set line 13 of {_p}'s scoreboard to "  &f%formatNumber(getTotal({_p}))%"
+			set line 12 of {_p}'s scoreboard to "&a&lCPS"
+			set line 11 of {_p}'s scoreboard to "  &f%formatNumber(getCPSOfPlayer({_p}))%"
+			set line 10 of {_p}'s scoreboard to "&9&lBuildings"
+			set {_lines::*} to getScoreboardLines({_p})
+			loop reversed 9 times:
+				set line loop-value of {_p}'s scoreboard to {_lines::%loop-counter%}
+	else:
+		send "{@prefix} &cYou must be playing to use the &6/cc scoreboard&c." to {_p}
+
+local function ccStats(p: player, of: offline player):
+	if isPlaying({_of}) is true:
+		send "{@prefix} &aComing soon..." to {_p}
+	else:
+		set {_of} to "&6You &chaven't" if ({_p} is {_of}) else "&6%{_of}% &chasn't"
+		send "{@prefix} &6%{_of}% haven't played before." to {_p}
 
 every 1 second:
 	loop all players where [isPlaying(input) is true]:
 		ccGive(loop-player)
-		ccScoreboard(loop-player, 0)
+		ccScoreboard(loop-player, false)
+
+on click:
+	if (byte tag "cc" of nbt of player's tool) is 1:
+		cancel event
+		if isPlaying(player) is true:
+			parse if {@use-vault} is true:
+				add 1 to player's money
+			addToTotal(player, 1)
+			send action bar "&6&l+1 cookie" to player
+			play sound "entity.generic.eat" at volume 0.5 to player
+		else:
+			send "{@prefix} &cUse &6/cc start &cto start playing." to player
+
+local function getScoreboardLines(p: player) :: strings:
+	set {_firstIndex} to {cc::scoreboard::%uuid of {_p}%}
+	set {_lastIndex} to {_firstIndex} + {cc::scoreboardMax}
+	loop elements from {_firstIndex} and {_lastIndex} out of {cc::buildings::*}:
+		set {_name} to getNameOfBuilding(loop-value)
+		set {_amount} to getAmountOfBuilding({_p}, loop-value)
+		add "  &7%{_name}%: &f%{_amount}%" to {_lines::*}
+	return {_lines::*}
+
+local function cycleScoreboardLines(p: player, inc: integer):
+	add {_inc} to {cc::scoreboard::%uuid of {_p}%}
+	if {cc::scoreboard::%uuid of {_p}%} is not between 1 and {cc::scoreboardMax}:
+		set {cc::scoreboard::%uuid of {_p}%} to 1 if ({cc::scoreboard::%uuid of {_p}%} <= 0)
+		set {cc::scoreboard::%uuid of {_p}%} to {cc::scoreboardMax} if ({cc::scoreboard::%uuid of {_p}%} > {cc::scoreboardMax})
+
+on tool change:
+	if (byte tag "cc" of nbt of (past event-slot)) is 1:
+		if player is sneaking:
+			if index of past event-slot is 0:
+				if index of event-slot is 8:
+					set {_cancel} to -1
+				else if index of event-slot is 1:
+					set {_cancel} to 1
+			else if index of past event-slot is 8:
+				if index of event-slot is 0:
+					set {_cancel} to 1
+				else if index of event-slot is 7:
+					set {_cancel} to -1
+			else:
+				if (difference between (index of past event-slot) and (index of event-slot)) is 1:
+					set {_cancel} to ((index of event-slot) - (index of past event-slot))
+			if {_cancel} is set:
+				cancel event
+				cycleScoreboardLines(player, {_cancel})
+				ccScoreboard(player, false)
+
+on chat:
+	if (metadata tag "ccGetReset" of player) is true:
+		cancel event
+		set {_input} to (unformatted message) parsed as boolean
+		if {_input} is set:
+			clear (metadata tag "ccGetReset" of player)
+			if {_input} is true:
+				ccReset(player, false)
+			else if {_input} is false:
+				send "{@prefix} &aCancelled your bakery reset."
+		else:
+			send "{@prefix} &aAre you sure you want to reset?"
+			send "{@prefix} &aType 'yes' or 'no' in the chat:"
+
+on tab complete of "/cc" or "/cookieclicker":
+	set tab completions for position 1 to "start", "shop", "reset", "delete", "scoreboard" and "stats"
+	if tab arg-1 is "stats":
+		set tab completions for position 2 to "[<player>]"
 
 command /cookieclicker [<text>] [<offline player>]:
 	aliases: /cc
@@ -107,162 +367,18 @@ command /cookieclicker [<text>] [<offline player>]:
 		if arg-1 is not set:
 			send "{@prefix} &cUsage: /cookieclicker (start | shop | reset | delete | scoreboard | stats)"
 		else:
-			if arg-2 is set:
-				if arg-1 is "stats":
-					ccStats(arg-2)
-				else:
-					send "{@prefix} &cOnly the stats command takes a second argument."
-			else if arg-2 is not set:
-				if arg-1 is "shop" or "upgrades":
-					ccShop(player)
-				else if arg-1 is "start" or "play":
-					ccStart(player)
-				else if arg-1 is "scoreboard" or "sb" or "board":
-					ccScoreboard(player, 1)
-				else if arg-1 is "delete":
-					ccDelete(player)
-				else if arg-1 is "reset" or "restart":
-					ccReset(player, 0)
-				else if arg-1 is "stats":
-					ccStats(player)
-				else:
-					send "{@prefix} &cUsage: /cookieclicker (start | shop | reset | delete | scoreboard | stats)"
-
-function ccGive(p: player):
-	set {_cps} to getCps({_p})
-	set {_file} to nbt compound of file playerFile({_p})
-	if {@use-vault} is true:
-		add {_cps} to {_p}'s money
-	else if {@use-vault} is false:
-		add {_cps} to float tag "total" of {_file}
-		save nbt file of {_file}
-
-function ccStats(p: offline player):
-	if isPlaying({_p}) is true:
-		set {_nbt} to pretty nbt from nbt compound of file playerFile({_p})
-		send "%{_nbt}%" to {_p}
-	else:
-		send "{@prefix} &c%{_p}% doesn't have a stats file." to {_p}
-
-on click:
-	if player's held item is cookie:
-		if name of player's held item is "&6&lCookie Clicker":
-			if isPlaying(player) is true:
-				cancel event
-				send action bar "&6&l+1 cookie" to player
-				set {_file} to nbt compound of file playerFile(player)
-				add 1 to float tag "total" of {_file}
-				save nbt file of {_file}
-				ccScoreboard(player, 0)
+			if arg-1 is "shop" or "upgrades":
+				ccShop(player)
+			else if arg-1 is "start" or "play":
+				ccStart(player)
+			else if arg-1 is "scoreboard" or "sb" or "board":
+				ccScoreboard(player, true)
+			else if arg-1 is "delete":
+				ccDelete(player)
+			else if arg-1 is "reset" or "restart":
+				ccReset(player, true)
+			else if arg-1 is "stats":
+				set {_of} to arg-2 ? player
+				ccStats(player, {_of})
 			else:
-				send "{@prefix} &cUse '/cc start' to play."
-
-function ccStart(p: player):
-	if isPlaying({_p}) is false:
-		send "{@prefix} &aCreating your player file." to {_p}
-		set {_file} to nbt compound of file playerFile({_p})
-		set float tag "total" of {_file} to 0
-		loop {buildings::*}:
-			set int tag "buildings;%loop-value%" of {_file} to 0
-		save nbt file of {_file}
-		send "{@prefix} &aCreated your player file." to {_p}
-		toggle {_p}'s scoreboard on
-		give 1 cookie named "&6&lCookie Clicker" with lore "&7Right click to get cookies." to {_p}
-	else if isPlaying({_p}) is true:
-		send "{@prefix} &cYou're already playing, use '/cc reset' if you want to reset." to {_p}
-
-on chat:
-	if {cc::%player%::typing} is set:
-		cancel event
-		if {cc::%player%::typing} is "reset":
-			if unformatted message is "yes":
-				delete {cc::%player%::typing}
-				ccReset(player, 1)
-			else if unformatted message is "no":
-				delete {cc::%player%::typing}
-				send "{@prefix} &aCancelled your bakery reset."
-			else:
-				send "{@prefix} &aAre you sure you want to reset?"
-				send "{@prefix} &aType 'yes' or 'no' in the chat:"
-
-function ccReset(p: player, i: integer):
-	if isPlaying({_p}) is true:
-		if {_i} is 0:
-			set {cc::%{_p}%::typing} to "reset"
-			send "{@prefix} &aAre you sure you want to reset?" to {_p}
-			send "{@prefix} &aType 'yes' or 'no' in the chat:" to {_p}
-		if {_i} is 1:
-			delete nbt from file playerFile({_p})
-			send "{@prefix} &aReset your cookie clicker account." to {_p}
-			ccStart({_p})
-	else:
-		send "{@prefix} &cYou must be playing to reset your account." to {_p}
-
-function ccDelete(p: player):
-	if isPlaying({_p}) is true:
-		delete nbt from file playerFile({_p})
-		toggle {_p}'s scoreboard off
-		send "{@prefix} &aDeleted your cookie clicker data." to {_p}
-	else:
-		send "{@prefix} &cYou must be playing to delete your account." to {_p}
-
-function ccShop(p: player):
-	create gui with virtual chest inventory with 5 rows named "Cookie Shop":
-		format gui slot (0,1,2,3,4,5,6,7,8,9,17,18,26,27,28,29,31,33,34,35,36,37,38,39,40,41,42,43,44) with black stained glass pane named "&0"
-	open last gui to {_p}
-	loop {buildings::*}:
-		formatSlot({_p}, loop-value)
-
-function formatSlot(p: player, t: text):
-	set {_pfile} to nbt compound of file playerFile({_p})
-	set {_bfile} to nbt compound of file "plugins/Skript/cookieclicker/buildings.dat"
-	set {_i} to tag "%{_t}%" of {_bfile}
-	loop nbt tags of {_i}:
-		set {_c%loop-value%} to tag "%{_t}%;%loop-value%" of {_bfile}
-	set {_amount} to tag "buildings;%{_t}%" of {_pfile}
-	set {_fprice} to ceil({_cprice} * (1.15^{_amount}))
-	edit {_p}'s gui:
-		format next gui slot with ({_citem} parsed as item) named "&f&l%{_cname}%" with lore "&aPrice: &6$%{_fprice}%", "&aCPS: %{_ccps}%" and "&aYou own: %{_amount}%":
-			ccBuy({_p}, {_t}, {_cprice}, {_amount}, gui slot)
-
-function ccBuy(p: player, t: text, price: number, amount: integer, slot: integer):
-	set {_file} to nbt compound of file playerFile({_p})
-	set {_fprice} to ceil({_price} * (1.15^{_amount}))
-	set {_money} to {_p}'s money if {@use-vault} is true
-	set {_money} to float tag "total" of {_file} if {@use-vault} is false
-	if {_money} < {_fprice}:
-		send "{@prefix} &cYou need more money to purchase this." to {_p}
-	else if {_money} >= {_fprice}:
-		remove {_fprice} from {_p}'s money if {@use-vault} is true
-		remove {_fprice} from float tag "total" of {_file} if {@use-vault} is false
-		add 1 to int tag "buildings;%{_t}%" of {_file}
-		save nbt file of {_file}
-		edit {_p}'s gui:
-			remove gui slot {_slot}
-		formatSlot({_p}, {_t})
-		ccScoreboard({_p}, 0)
-
-function getCps(p: offline player) :: number:
-	set {_bfile} to nbt compound of file "plugins/Skript/cookieclicker/buildings.dat"
-	set {_pfile} to nbt compound of file playerFile({_p})
-	set {_cps} to 0
-	loop {buildings::*}:
-		set {_inc} to tag "%loop-value%;cps" of {_bfile}
-		set {_amount} to tag "buildings;%loop-value%" of {_pfile}
-		add ({_inc} * {_amount}) to {_cps}
-	return {_cps}
-
-function ccScoreboard(p: player, i: integer):
-	if isPlaying({_p}) is true:
-		if {_i} is 1:
-			toggle {_p}'s scoreboard
-		if scoreboard of {_p} is on:
-			set {_file} to nbt compound of file playerFile({_p})
-			set {_cookies} to float tag "total" of {_file}
-			set {_cps} to getCps({_p})
-			set title of {_p}'s scoreboard to "    &6&lCookie Clicker    "
-			set line 15 of {_p}'s scoreboard to ""
-			set line 15 of {_p}'s scoreboard to "&6Cookies: &f%{_cookies}%"
-			set line 14 of {_p}'s scoreboard to "&6CPS: &f%{_cps}%"
-	else:
-		send "{@prefix} &cYou must be playing to use the scoreboard." to {_p}
+				send "{@prefix} &cUsage: /cookieclicker (start | shop | reset | delete | scoreboard | stats)"
